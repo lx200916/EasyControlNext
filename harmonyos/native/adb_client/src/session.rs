@@ -10,6 +10,7 @@ use easycontrol_protocol::adb::{
 
 use crate::error::{AdbError, AdbResult};
 use crate::signer::AdbSigner;
+use crate::sync_pull::{build_quit, build_recv_request, PullStreamParser, SyncPullResult};
 use crate::sync_push::{build_sync_push, SyncPushPlan};
 use crate::transport::AdbTransport;
 
@@ -89,6 +90,13 @@ impl<T: AdbTransport> AdbSession<T> {
 
   pub fn max_data(&self) -> u32 {
     self.max_data
+  }
+
+  /// Adjust transport read/write timeouts after connect (e.g. short polls during Gate D retries).
+  pub fn set_io_timeout(&mut self, timeout: Duration) -> AdbResult<()> {
+    self.transport.set_read_timeout(Some(timeout))?;
+    self.transport.set_write_timeout(Some(timeout))?;
+    Ok(())
   }
 
   pub fn close(&mut self) -> AdbResult<()> {
@@ -238,6 +246,67 @@ impl<T: AdbTransport> AdbSession<T> {
     self.wait_until(|s| s.streams.get(&id).map(|st| st.closed).unwrap_or(true))?;
     let _ = self.streams.remove(&id);
     Ok(plan)
+  }
+
+  /// Sync pull file bytes from `remote_path` (RECV/DATA/DONE). Separate from live Gate D mux.
+  pub fn sync_pull(&mut self, remote_path: &str) -> AdbResult<SyncPullResult> {
+    let req = build_recv_request(remote_path)?;
+    let id = self.open("sync:")?;
+    self.write_stream(id, &req)?;
+
+    let mut parser = PullStreamParser::new();
+    let mut spins = 0u32;
+    while !parser.is_finished() {
+      self.wait_until(|s| {
+        s.streams
+          .get(&id)
+          .map(|st| !st.incoming.is_empty() || st.closed)
+          .unwrap_or(true)
+      })?;
+      let chunk = {
+        let st = self
+          .streams
+          .get_mut(&id)
+          .ok_or(AdbError::StreamNotFound(id))?;
+        st.incoming.drain(..).collect::<Vec<_>>()
+      };
+      if !chunk.is_empty() {
+        parser.push(&chunk)?;
+      }
+      if parser.is_finished() {
+        break;
+      }
+      if self.is_stream_closed(id) {
+        // Flush any remaining buffered bytes before failing.
+        let leftover = {
+          let st = self
+            .streams
+            .get_mut(&id)
+            .ok_or(AdbError::StreamNotFound(id))?;
+          st.incoming.drain(..).collect::<Vec<_>>()
+        };
+        if !leftover.is_empty() {
+          parser.push(&leftover)?;
+        }
+        if !parser.is_finished() {
+          return Err(AdbError::RemoteFail(
+            "sync pull stream closed before DONE".into(),
+          ));
+        }
+        break;
+      }
+      spins += 1;
+      if spins > 50_000 {
+        return Err(AdbError::Timeout);
+      }
+    }
+
+    let result = parser.finish(remote_path)?;
+    // Best-effort QUIT; some daemons CLSE immediately after DONE.
+    let _ = self.write_stream(id, &build_quit()?);
+    let _ = self.close_stream(id);
+    let _ = self.streams.remove(&id);
+    Ok(result)
   }
 
   /// Open `tcp:<port>` and return local_id for bidirectional I/O.

@@ -77,3 +77,63 @@ Exact import/package wiring can follow the `ohrs` dist layout for the installed 
 - `encodeControlClipboard(text): Buffer`
 
 High-frequency session I/O stays inside Rust in later phases.
+
+## Server jar + Gate D (Phase 4)
+
+Android `ClientStream.startServer()` semantics live in `adb_client::server_launch`:
+
+- Remote path: `/data/local/tmp/easycontrolnext_server_<app_version_code>.jar` (app module `versionCode`, currently `10014`)
+- Launch: ADB `shell:app_process -Djava.class.path=… / com.shiyunjin.easycontrolnext.server.Server …`
+- Dual sockets: **main** then **video** on `serverPort` (default `25166`); direct TCP preferred, ADB `tcp:<port>` fallback
+- Video preamble (BE): `useH265:u8` + `width:u32` + `height:u32` + length-prefixed CSD0 (+ CSD1 if AVC)
+
+```bash
+# From harmonyos/
+./scripts/copy_server_jar.sh   # → entry/.../rawfile/easycontrolnext_server.jar (+ .version sidecar)
+
+cd native
+export CARGO_HOME="$PWD/.cargo-home"
+# Reuses native/.adb-keys/easycontrol_gate_c from Gate C
+cargo run -p easycontrol-adb-client --bin gate_d -- 192.168.31.60 5555
+```
+
+Gate D **PASS** criteria: AUTH+CNXN, jar push, app_process up, main+video accept, parse video header (+ optional keepalive on main).
+
+## Video framing + decode (Phase 5 / Gate E first-frame)
+
+Pure Rust in `protocol::video` (re-exported via `adb_client` / NAPI):
+
+- Header + length-prefixed CSD frames (each body = `pts:i64 BE` + NAL)
+- Access units: same length-prefix + PTS + Annex-B payload
+- NAPI: `parseVideoStreamHeader`, `parseVideoAccessUnit`, existing `encodeControlTouch`
+
+Host: `cargo test -p easycontrol-protocol --lib video`
+
+**OH_VideoDecoder path** (`adb_core/src/ohos_vdec.rs`, OHOS target only):
+
+- `OH_NativeWindow_CreateNativeWindowFromSurfaceId` + `OH_VideoDecoder_*` (links `libnative_media_vdec` / `core` / `native_window`)
+- NAPI: `videoDecoderPlayBitstream(surfaceId, easycontrolBytes)`, `videoDecoderWaitFirstFrame`, `videoDecoderStatus`, `videoDecoderRelease`
+- Session loads `rawfile/fixture_avc_easycontrol.bin` (real baseline AVC) on XComponent `onLoad`
+
+Verify on foldable emu: Home → Connect → Session status `首帧已渲染`; HiLog `SessionDecode FIRST_FRAME_OK`.
+
+## Live Gate D session (on-device)
+
+NAPI (background thread; ArkTS polls):
+
+- `liveSessionStart({ host, adbPort, serverPort, surfaceId, jarBytes, privateKeyPem, … })`
+- `liveSessionStatus()` → `{ phase, detail, mode, width, height, ausFed, firstFrame, live }`
+- `liveSessionWriteControl(packet)` — touch/keepalive on **direct** main TCP
+- `liveSessionStop()`
+
+Session UX: Connect → try live (rawfile jar + Gate C RSA) → OH_VideoDecoder stream; on error/timeout → fixture toast fallback.
+
+```bash
+./scripts/build_native_ohos.sh
+# DevEco / hvigorw assembleHap, then:
+hdc -t 127.0.0.1:5559 file send entry/build/default/outputs/default/entry-default-signed.hap /data/local/tmp/entry.hap
+hdc -t 127.0.0.1:5559 shell bm install -p /data/local/tmp/entry.hap
+hdc -t 127.0.0.1:5559 shell aa start -a EntryAbility -b com.shiyunjin.easycontrolnext -m entry
+```
+
+**Network note:** Foldable emu may reach host gateway (`10.0.2.2`) and sometimes LAN Android with high RTT; if live stalls, run HAP on a HarmonyOS device on the same LAN as the Android target, or relay ADB/server ports via the host.

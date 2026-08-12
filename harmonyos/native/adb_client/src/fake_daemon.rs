@@ -11,11 +11,12 @@ use easycontrol_protocol::adb::{
   self, AdbMessage, AUTH_TYPE_RSA_PUBLIC, AUTH_TYPE_SIGNATURE, AUTH_TYPE_TOKEN, CMD_AUTH, CMD_CLSE,
   CMD_CNXN, CMD_OKAY, CMD_OPEN, CMD_WRTE, CONNECT_MAXDATA, CONNECT_VERSION, ADB_HEADER_LENGTH,
 };
-use easycontrol_protocol::sync::{self, ID_DATA, ID_DONE, ID_QUIT, ID_SEND};
+use easycontrol_protocol::sync::{self, ID_DATA, ID_DONE, ID_QUIT, ID_RECV, ID_SEND};
 use sha2::{Digest, Sha256};
 
 use crate::signer::DeterministicTestSigner;
-use crate::sync_push::{PUSH_DONE_MTIME, PUSH_FILE_MODE};
+use crate::sync_pull::{encode_fail_response, encode_pull_response};
+use crate::sync_push::{PUSH_DATA_CHUNK, PUSH_DONE_MTIME, PUSH_FILE_MODE};
 
 #[derive(Debug, Default, Clone)]
 pub struct FakeDaemonState {
@@ -201,8 +202,27 @@ fn handle_client(mut stream: TcpStream, state: Arc<Mutex<FakeDaemonState>>) -> s
           match &slot.kind {
             StreamKind::Sync => {
               slot.buf.extend_from_slice(&msg.payload);
-              if let Some((path, data)) = try_complete_sync(&slot.buf) {
+              if let Some((path, data)) = try_complete_sync_push(&slot.buf) {
                 state.lock().unwrap().pushed_files.insert(path, data);
+                write_all(&mut stream, &adb::generate_close(remote_id, client_local))?;
+                slot.closed = true;
+              } else if let Some(path) = try_complete_sync_recv(&slot.buf) {
+                let file = state.lock().unwrap().pushed_files.get(&path).cloned();
+                let reply = match file {
+                  Some(data) => encode_pull_response(&data, PUSH_DONE_MTIME)
+                    .unwrap_or_else(|_| encode_fail_response("encode error").unwrap()),
+                  None => encode_fail_response("No such file or directory").unwrap(),
+                };
+                // Chunk reply across WRTE frames like a real daemon might.
+                let mut offset = 0usize;
+                while offset < reply.len() {
+                  let end = (offset + PUSH_DATA_CHUNK.min(512)).min(reply.len());
+                  write_all(
+                    &mut stream,
+                    &adb::generate_write(remote_id, client_local, &reply[offset..end]),
+                  )?;
+                  offset = end;
+                }
                 write_all(&mut stream, &adb::generate_close(remote_id, client_local))?;
                 slot.closed = true;
               }
@@ -280,7 +300,23 @@ fn shell_output(cmd: &str) -> Vec<u8> {
   format!("ok:{cmd}\n").into_bytes()
 }
 
-fn try_complete_sync(buf: &[u8]) -> Option<(String, Vec<u8>)> {
+fn try_complete_sync_recv(buf: &[u8]) -> Option<String> {
+  if buf.len() < 8 {
+    return None;
+  }
+  let recv = sync::SyncHeader::decode(buf).ok()?;
+  if &recv.id != ID_RECV {
+    return None;
+  }
+  let end = 8 + recv.arg as usize;
+  if buf.len() < end {
+    return None;
+  }
+  let path = std::str::from_utf8(&buf[8..end]).ok()?.to_string();
+  Some(path)
+}
+
+fn try_complete_sync_push(buf: &[u8]) -> Option<(String, Vec<u8>)> {
   let mut i = 0usize;
   if buf.len() < 8 {
     return None;

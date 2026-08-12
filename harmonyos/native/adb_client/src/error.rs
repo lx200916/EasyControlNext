@@ -9,8 +9,9 @@ pub enum AdbError {
   Protocol(ProtocolError),
   UnexpectedCommand { expected: &'static str, got: u32 },
   AuthFailed(&'static str),
-  /// Production RSA/ADB key encoding is not wired yet — use DeterministicTestSigner in tests only.
+  /// Deprecated placeholder error — prefer [`crate::signer::RsaAdbSigner`].
   ProductionSignerPending,
+  Crypto(String),
   StreamClosed,
   StreamNotFound(u32),
   FlowControl,
@@ -33,6 +34,7 @@ impl fmt::Display for AdbError {
         f,
         "production ADB RSA signer pending (HUKS-backed key + ADB public-key encoding)"
       ),
+      Self::Crypto(msg) => write!(f, "crypto error: {msg}"),
       Self::StreamClosed => write!(f, "adb stream closed"),
       Self::StreamNotFound(id) => write!(f, "adb stream not found: local_id={id}"),
       Self::FlowControl => write!(f, "adb flow control: write without OKAY credit"),

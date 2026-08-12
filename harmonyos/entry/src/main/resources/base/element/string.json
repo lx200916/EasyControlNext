@@ -5,12 +5,634 @@
       "value": "EasyControlNext entry module"
     },
     {
+      "name": "permission_pasteboard_reason",
+      "value": "将本机剪贴板文本发送到被控 Android 设备"
+    },
+    {
       "name": "EntryAbility_desc",
       "value": "EasyControlNext main ability"
     },
     {
       "name": "EntryAbility_label",
       "value": "易控"
+    },
+    {
+      "name": "app_title",
+      "value": "易控"
+    },
+    {
+      "name": "home_subtitle",
+      "value": "远程控制 Android 设备"
+    },
+    {
+      "name": "home_empty_title",
+      "value": "还没有设备"
+    },
+    {
+      "name": "home_empty_hint",
+      "value": "点右上角「+」添加设备，或切换到「设置」查看连接默认值"
+    },
+    {
+      "name": "home_tab_devices",
+      "value": "设备"
+    },
+    {
+      "name": "home_tab_settings",
+      "value": "设置"
+    },
+    {
+      "name": "home_tab_add",
+      "value": "新增"
+    },
+    {
+      "name": "action_connect",
+      "value": "连接"
+    },
+    {
+      "name": "action_manage",
+      "value": "管理"
+    },
+    {
+      "name": "action_edit",
+      "value": "编辑"
+    },
+    {
+      "name": "action_delete",
+      "value": "删除"
+    },
+    {
+      "name": "action_add_device",
+      "value": "添加设备"
+    },
+    {
+      "name": "action_settings",
+      "value": "设置"
+    },
+    {
+      "name": "action_save",
+      "value": "保存"
+    },
+    {
+      "name": "action_save_connect",
+      "value": "保存并连接"
+    },
+    {
+      "name": "detail_empty_title",
+      "value": "选择一台设备"
+    },
+    {
+      "name": "detail_empty_hint",
+      "value": "从左侧选择一台设备"
+    },
+    {
+      "name": "detail_label_endpoint",
+      "value": "连接地址"
+    },
+    {
+      "name": "detail_label_model",
+      "value": "机型"
+    },
+    {
+      "name": "detail_label_android",
+      "value": "系统"
+    },
+    {
+      "name": "detail_label_stream",
+      "value": "画面"
+    },
+    {
+      "name": "detail_label_status",
+      "value": "状态"
+    },
+    {
+      "name": "detail_refresh_info",
+      "value": "刷新信息"
+    },
+    {
+      "name": "detail_probing",
+      "value": "探测中…"
+    },
+    {
+      "name": "detail_unknown",
+      "value": "未知"
+    },
+    {
+      "name": "detail_unprobed",
+      "value": "未探测"
+    },
+    {
+      "name": "detail_reachable",
+      "value": "可达"
+    },
+    {
+      "name": "detail_unreachable",
+      "value": "不可达"
+    },
+
+    {
+      "name": "editor_title_new",
+      "value": "添加设备"
+    },
+    {
+      "name": "editor_title_edit",
+      "value": "编辑设备"
+    },
+    {
+      "name": "editor_sections",
+      "value": "分区"
+    },
+    {
+      "name": "editor_section_later",
+      "value": "稍后"
+    },
+    {
+      "name": "editor_field_name",
+      "value": "设备名称"
+    },
+    {
+      "name": "editor_field_host",
+      "value": "主机地址"
+    },
+    {
+      "name": "editor_field_adb_port",
+      "value": "ADB 端口"
+    },
+    {
+      "name": "editor_field_server_port",
+      "value": "Server 端口"
+    },
+    {
+      "name": "editor_basic_hint",
+      "value": "填写主机与 ADB/Server 端口；首次无线调试请到「配对」分区输入配对端口与配对码。"
+    },
+    {
+      "name": "editor_field_connect_on_start",
+      "value": "启动时自动连接"
+    },
+    {
+      "name": "editor_field_connect_on_start_hint",
+      "value": "打开控制器 App 后自动连接此设备"
+    },
+    {
+      "name": "editor_field_max_size",
+      "value": "最大边长"
+    },
+    {
+      "name": "editor_field_max_fps",
+      "value": "最大帧率"
+    },
+    {
+      "name": "editor_field_use_h265",
+      "value": "优先 H.265"
+    },
+    {
+      "name": "editor_field_use_h265_hint",
+      "value": "双方都支持时使用 HEVC"
+    },
+    {
+      "name": "editor_field_full_on_connect",
+      "value": "默认全屏启动"
+    },
+    {
+      "name": "editor_field_full_on_connect_hint",
+      "value": "Harmony 会话已是全屏；保留以对齐 Android"
+    },
+    {
+      "name": "editor_field_max_video_bit",
+      "value": "码率 (Mbps)"
+    },
+    {
+      "name": "editor_field_is_audio",
+      "value": "音频"
+    },
+    {
+      "name": "editor_field_is_audio_hint",
+      "value": "连接时传给 server（需 Android 12+）。会话内可开关；控制器播放仍待接入"
+    },
+    {
+      "name": "editor_field_listen_clip",
+      "value": "监听剪切板"
+    },
+    {
+      "name": "editor_field_listen_clip_hint",
+      "value": "运行时同步被控端剪切板（app_process listenClip）"
+    },
+    {
+      "name": "editor_field_keep_wake",
+      "value": "被控端保持唤醒"
+    },
+    {
+      "name": "editor_field_keep_wake_hint",
+      "value": "运行中保持唤醒（app_process keepAwake）"
+    },
+    {
+      "name": "editor_section_on_connect",
+      "value": "连接时"
+    },
+    {
+      "name": "editor_field_wake_on_connect",
+      "value": "连接时自动唤醒"
+    },
+    {
+      "name": "editor_field_wake_on_connect_hint",
+      "value": "连接成功后发送电源唤醒"
+    },
+    {
+      "name": "editor_field_light_off_on_connect",
+      "value": "连接时关闭背光"
+    },
+    {
+      "name": "editor_field_light_off_on_connect_hint",
+      "value": "连接约 2 秒后关闭被控端背光"
+    },
+    {
+      "name": "editor_field_show_nav_bar",
+      "value": "显示导航栏"
+    },
+    {
+      "name": "editor_field_show_nav_bar_hint",
+      "value": "会话默认显示底部导航键"
+    },
+    {
+      "name": "editor_field_custom_res",
+      "value": "连接时修改分辨率"
+    },
+    {
+      "name": "editor_field_custom_res_hint",
+      "value": "连接后发送固定宽高分辨率事件"
+    },
+    {
+      "name": "editor_field_custom_res_w",
+      "value": "宽度"
+    },
+    {
+      "name": "editor_field_custom_res_h",
+      "value": "高度"
+    },
+    {
+      "name": "editor_section_on_close",
+      "value": "断开时"
+    },
+    {
+      "name": "editor_field_lock_on_close",
+      "value": "断开时锁定"
+    },
+    {
+      "name": "editor_field_lock_on_close_hint",
+      "value": "关闭会话时锁定被控端（覆盖恢复背光）"
+    },
+    {
+      "name": "editor_field_light_on_close",
+      "value": "断开时恢复背光"
+    },
+    {
+      "name": "editor_field_light_on_close_hint",
+      "value": "未锁定时恢复被控端背光"
+    },
+    {
+      "name": "editor_video_hint",
+      "value": "修改视频选项会断开与预设的链接。可在设置 → 连接预设重新应用。"
+    },
+    {
+      "name": "editor_pairing_hint",
+      "value": "被控机：开发者选项 → 无线调试 →「使用配对码配对」或「使用二维码配对」。配对成功后可自动发现连接端口并填入基本信息。"
+    },
+    {
+      "name": "editor_field_pair_port",
+      "value": "配对端口"
+    },
+    {
+      "name": "editor_field_pair_code",
+      "value": "配对码"
+    },
+    {
+      "name": "editor_action_pair_only",
+      "value": "仅配对"
+    },
+    {
+      "name": "editor_action_pair_fill",
+      "value": "配对并填充 ADB 端口"
+    },
+    {
+      "name": "editor_action_qr_pair",
+      "value": "二维码配对"
+    },
+    {
+      "name": "editor_qr_sheet_title",
+      "value": "扫描二维码配对"
+    },
+    {
+      "name": "editor_qr_sheet_hint",
+      "value": "在被控机无线调试里选择「使用二维码配对」，扫描下方二维码。双方需同一 Wi‑Fi。"
+    },
+    {
+      "name": "editor_qr_waiting",
+      "value": "等待被控机扫描…"
+    },
+    {
+      "name": "editor_qr_payload_fallback",
+      "value": "无法生成二维码图像时，可将下列内容发给被控机："
+    },
+    {
+      "name": "manage_section_session",
+      "value": "本次会话"
+    },
+    {
+      "name": "manage_section_session_hint",
+      "value": "以下操作仅影响即将打开的连接，默认不改已保存设备"
+    },
+    {
+      "name": "manage_section_device",
+      "value": "设备管理"
+    },
+    {
+      "name": "manage_section_device_hint",
+      "value": "编辑或删除已保存的设备"
+    },
+    {
+      "name": "manage_apply_preset",
+      "value": "应用预设"
+    },
+    {
+      "name": "manage_apply_preset_detail",
+      "value": "仅本次会话覆盖流媒体选项"
+    },
+    {
+      "name": "detail_section_session",
+      "value": "本次会话"
+    },
+    {
+      "name": "detail_section_session_hint",
+      "value": "仅影响即将打开的连接，不改已保存设备"
+    },
+    {
+      "name": "detail_action_temp_app",
+      "value": "临时启动应用"
+    },
+    {
+      "name": "detail_action_temp_app_hint",
+      "value": "虚拟屏单应用镜像（Android 11+）"
+    },
+    {
+      "name": "detail_action_camera",
+      "value": "使用摄像头"
+    },
+    {
+      "name": "detail_action_camera_hint",
+      "value": "相机镜像（Android 12+）"
+    },
+
+    {
+      "name": "settings_title",
+      "value": "设置"
+    },
+    {
+      "name": "settings_cat_about",
+      "value": "关于"
+    },
+    {
+      "name": "settings_cat_general",
+      "value": "通用"
+    },
+    {
+      "name": "settings_cat_connection",
+      "value": "连接"
+    },
+    {
+      "name": "settings_cat_diagnostics",
+      "value": "诊断"
+    },
+    {
+      "name": "settings_about_tagline",
+      "value": "HarmonyOS 控制端 · 远程控制 Android"
+    },
+    {
+      "name": "settings_version",
+      "value": "版本"
+    },
+    {
+      "name": "settings_bundle",
+      "value": "包名"
+    },
+    {
+      "name": "settings_about_note",
+      "value": "本应用作为控制器，连接已安装服务端的 Android 设备。"
+    },
+    {
+      "name": "settings_language",
+      "value": "语言"
+    },
+    {
+      "name": "settings_language_hint",
+      "value": "当前跟随系统语言显示。"
+    },
+    {
+      "name": "settings_presets",
+      "value": "连接预设"
+    },
+    {
+      "name": "settings_connection_hint",
+      "value": "使用内置预设快速调整画质与帧率，可应用到已保存设备。"
+    },
+    {
+      "name": "presets_title",
+      "value": "连接预设"
+    },
+    {
+      "name": "presets_subtitle",
+      "value": "内置模板 · 应用到已保存设备"
+    },
+    {
+      "name": "presets_apply_to_device",
+      "value": "应用到设备"
+    },
+    {
+      "name": "presets_lite_note",
+      "value": "内置三项预设。「应用预设」仅影响本次会话，不会修改已保存设备。"
+    },
+    {
+      "name": "settings_error_logs",
+      "value": "错误日志"
+    },
+    {
+      "name": "settings_diagnostics_hint",
+      "value": "用于排查投屏连接问题。"
+    },
+    {
+      "name": "settings_gate_b_probe",
+      "value": "原生能力检测"
+    },
+    {
+      "name": "home_devices_heading",
+      "value": "设备"
+    },
+    {
+      "name": "settings_coming_soon",
+      "value": "即将推出"
+    },
+    {
+      "name": "gate_b_idle",
+      "value": "尚未检测"
+    },
+    {
+      "name": "session_action_close",
+      "value": "断开"
+    },
+    {
+      "name": "session_action_back",
+      "value": "返回"
+    },
+    {
+      "name": "session_action_home",
+      "value": "主页"
+    },
+    {
+      "name": "session_action_recents",
+      "value": "多任务"
+    },
+    {
+      "name": "session_action_power",
+      "value": "电源"
+    },
+    {
+      "name": "session_action_rotate",
+      "value": "横竖屏"
+    },
+    {
+      "name": "session_action_light",
+      "value": "背光"
+    },
+    {
+      "name": "session_action_nav",
+      "value": "导航栏"
+    },
+    {
+      "name": "session_rail_title",
+      "value": "投屏控制"
+    },
+    {
+      "name": "session_rail_subtitle",
+      "value": "全屏镜像 · 宽屏侧栏"
+    },
+    {
+      "name": "session_waiting_surface",
+      "value": "等待画面…"
+    },
+    {
+      "name": "session_waiting_frame",
+      "value": "连接中…"
+    },
+    {
+      "name": "session_restoring_surface",
+      "value": "恢复画面…"
+    },
+    {
+      "name": "session_action_more",
+      "value": "更多"
+    },
+    {
+      "name": "session_action_clipboard",
+      "value": "剪贴板"
+    },
+    {
+      "name": "session_action_notification",
+      "value": "通知栏"
+    },
+    {
+      "name": "session_action_audio",
+      "value": "转接音频"
+    },
+    {
+      "name": "session_action_vol_up",
+      "value": "音量+"
+    },
+    {
+      "name": "session_action_vol_down",
+      "value": "音量-"
+    },
+    {
+      "name": "session_action_screenshot",
+      "value": "截图"
+    },
+    {
+      "name": "session_action_file_pull",
+      "value": "拉取文件"
+    },
+    {
+      "name": "session_file_pull_title",
+      "value": "拉取文件"
+    },
+    {
+      "name": "session_file_pull_hint",
+      "value": "浏览远端目录，点选文件即可保存到本应用（单文件不超过 32MB）。"
+    },
+    {
+      "name": "session_file_pull_stub_title",
+      "value": "拉取文件"
+    },
+    {
+      "name": "session_file_pull_stub_msg",
+      "value": "无法拉取远端文件。"
+    },
+    {
+      "name": "session_file_pull_shortcut_download",
+      "value": "下载"
+    },
+    {
+      "name": "session_file_pull_shortcut_sdcard",
+      "value": "存储"
+    },
+    {
+      "name": "session_file_pull_loading",
+      "value": "正在加载…"
+    },
+    {
+      "name": "session_file_pull_saving",
+      "value": "正在保存…"
+    },
+    {
+      "name": "session_file_pull_retry",
+      "value": "重试"
+    },
+    {
+      "name": "session_file_pull_empty",
+      "value": "此目录为空"
+    },
+    {
+      "name": "session_file_pull_folder",
+      "value": "文件夹"
+    },
+    {
+      "name": "session_file_pull_file",
+      "value": "文件 · 点选拉取"
+    },
+    {
+      "name": "session_hover_dock_hint",
+      "value": "悬停模式 · 控制与键盘"
+    },
+    {
+      "name": "session_action_launch_app",
+      "value": "打开应用"
+    },
+    {
+      "name": "session_action_keyboard",
+      "value": "键盘"
+    },
+    {
+      "name": "session_app_picker_title",
+      "value": "快速打开应用"
+    },
+    {
+      "name": "session_app_picker_hint",
+      "value": "在远端设备前台打开应用"
+    },
+    {
+      "name": "session_app_picker_empty",
+      "value": "未找到可打开的应用"
+    },
+    {
+      "name": "session_keyboard_cjk_note",
+      "value": "英文键盘"
     }
   ]
 }

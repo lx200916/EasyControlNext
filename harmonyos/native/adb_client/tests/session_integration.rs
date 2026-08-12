@@ -56,6 +56,32 @@ fn sync_push_sequence_and_hash() {
 }
 
 #[test]
+fn sync_pull_after_push() {
+  let daemon = FakeDaemon::start().unwrap();
+  let mut session = connect_session(&daemon);
+  let payload = b"hello-easycontrol-sync-pull";
+  let path = "/data/local/tmp/easycontrol_pull.bin";
+  let plan = session.sync_push(path, payload).unwrap();
+  let pulled = session.sync_pull(path).unwrap();
+  assert_eq!(pulled.data, payload);
+  assert_eq!(pulled.sha256_hex, plan.sha256_hex);
+  assert_eq!(pulled.remote_path, path);
+}
+
+#[test]
+fn sync_pull_missing_fails() {
+  let daemon = FakeDaemon::start().unwrap();
+  let mut session = connect_session(&daemon);
+  let err = session
+    .sync_pull("/data/local/tmp/does_not_exist.bin")
+    .unwrap_err();
+  match err {
+    AdbError::RemoteFail(msg) => assert!(msg.contains("FAIL") || msg.contains("No such")),
+    other => panic!("unexpected error: {other:?}"),
+  }
+}
+
+#[test]
 fn tcp_echo_bidirectional() {
   let daemon = FakeDaemon::start().unwrap();
   let mut session = connect_session(&daemon);

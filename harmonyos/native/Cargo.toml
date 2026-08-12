@@ -21,3 +21,16 @@ napi-build-ohos = "1.2.0"
 easycontrol-protocol = { path = "protocol" }
 easycontrol-adb-client = { path = "adb_client" }
 sha2 = "0.10"
+sha1 = { version = "0.10", features = ["oid"] }
+rsa = { version = "0.9", default-features = false, features = ["std", "pem"] }
+rand = "0.8"
+base64 = "0.22"
+num-bigint-dig = "0.8"
+num-traits = "0.2"
+curve25519-dalek = { version = "4.1", default-features = false, features = ["alloc", "precomputed-tables", "zeroize"] }
+zeroize = { version = "1.8", features = ["derive"] }
+hkdf = "0.12"
+aes-gcm = "0.10"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = "1"
+rcgen = { version = "0.13", default-features = false, features = ["ring", "pem"] }

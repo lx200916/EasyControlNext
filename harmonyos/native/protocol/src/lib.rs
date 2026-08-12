@@ -11,8 +11,13 @@ pub mod adb;
 pub mod control;
 pub mod error;
 pub mod sync;
+pub mod video;
 
 pub use error::{ProtocolError, ProtocolResult};
+pub use video::{
+  looks_like_annex_b, parse_video_access_unit, parse_video_stream_header, strip_pts_prefix,
+  VideoAccessUnit, VideoStreamHeader, MAX_AU_BYTES, MAX_CSD_BYTES, PTS_PREFIX_BYTES,
+};
 
 /// Library version string for NAPI / diagnostics.
 pub const PROTOCOL_VERSION: &str = env!("CARGO_PKG_VERSION");

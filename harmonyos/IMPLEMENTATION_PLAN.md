@@ -39,7 +39,7 @@ Inspect `git status` / `git diff` before editing shared scaffold files.
 │   typed Device/Preset · relationalStore · preferences · DTOs · diagnostics              │
 │                                        │ Node-API (coarse, binary-safe)                 │
 │   native/adb_core (Rust cdylib via ohos-rs)                                             │
-│   ADB framing · transport/session FSM · crypto/pairing · control encode · sync push     │
+│   ADB framing · transport/session FSM · crypto/pairing · control encode · sync push/pull │
 └────────────────────────────────────────┼────────────────────────────────────────────────┘
                                          │ ADB / TLS / TCP
                                          ▼
@@ -106,7 +106,7 @@ harmonyos/
 - [x] ohos-rs Node-API hello / binary-safe Buffer round-trip exports in source
 - [x] Host Rust unit-test entry points + reproducible build scripts/docs
 - [x] Produce `aarch64-unknown-linux-ohos` `libadb_core.so` via cargo + OHOS NDK fallback (`ohrs` global install blocked in this environment)
-- [ ] On-device/emulator ArkTS call of binary-safe export (gate B) — `.so` built; ArkTS example under `native/arkts/`; wire into entry only after staging libs
+- [x] On-device/emulator ArkTS call of binary-safe export (Gate B) — foldable emu `127.0.0.1:5559` (API 24, arm64, EXPAND): `nativeVersion=0.1.0`, `nativeCapabilities`, `roundTripBytes` PASS; auto-signing via product `signingConfig: "default"`; probe in `entry/src/main/ets/native/AdbCore.ets`
 
 **Toolchain notes (observed 2026-08-12)**
 
@@ -134,41 +134,80 @@ harmonyos/
 - [x] TCP ADB transport trait + `TcpStream` impl; unified stream multiplexer (`AdbSession`)
 - [x] CNXN / AUTH handshake + OPEN / OKAY / WRTE / CLSE + write-credit flow control
 - [x] shell, sync push framing/service, `tcp:<port>` abstractions
-- [x] `AdbSigner` trait + `DeterministicTestSigner` (host) + `PendingProductionSigner` (**production RSA/HUKS pending — not faked as success**)
-- [x] Host fake daemon + integration tests (handshake, shell echo, sync hash, tcp echo, flow control, malformed, timeout, close, bad auth)
-- [ ] Gate C on real pre-authorized Android device (same scenarios as fake daemon)
-- [ ] Production RSA 2048 ADB key encode/sign + HUKS/Asset Store wrapping
+- [x] sync pull (RECV/DATA/DONE/FAIL) + FakeDaemon + host integration tests; NAPI `adbSyncPull` + Session UI (≤32 MiB, separate TCP from Gate D)
+- [x] `AdbSigner` trait + `DeterministicTestSigner` (host) + `RsaAdbSigner` (RSA-2048 ADB wire format)
+- [x] Host fake daemon + integration tests (handshake, shell echo, sync push/pull, tcp echo, flow control, malformed, timeout, close, bad auth)
+- [x] Gate C on real Android device (`gate_c` bin vs `192.168.31.60:5555`: AUTH+CNXN, shell, sync push+sha256, tcp echo)
+- [ ] HUKS / Asset Store wrapping for on-device HarmonyOS key storage (host PEM path done for Gate C)
 
 ### Phase 3 — TLS connect and wireless pairing
 
-- [ ] A_STLS + TLS 1.3 (`rustls` first; OpenSSL trait fallback if needed)
-- [ ] Client RSA key + X.509 for wireless debugging
-- [ ] Pairing framing, exporter `adb-label\0` (64 B), HKDF-SHA256, AES-128-GCM, peer-info
-- [ ] **CRITICAL:** AOSP/BoringSSL-compatible SPAKE2-25519 (do not assume RustCrypto `spake2` wire compat)
-- [ ] Negative tests: wrong code, expired port, bad cert, altered transcript, truncated, reconnect
-- [ ] mDNS via ArkTS `@ohos.net.mdns`: `_adb-tls-pairing._tcp.` / `_adb-tls-connect._tcp.`
+- [ ] A_STLS + TLS 1.3 for **ADB session** connect after pairing (`rustls` preferred) — still open; pairing path uses its own TLS 1.3
+- [x] Pairing TLS 1.3 (`rustls` + accept-any server cert) + client RSA/X.509 from PEM (`rcgen`) for wireless pairing handshake
+- [x] Pairing framing, exporter `adb-label\0` (64 B), HKDF-SHA256, AES-128-GCM, peer-info (`native/adb_client/src/pairing/`)
+- [x] **CRITICAL:** AOSP/BoringSSL-compatible SPAKE2-25519 via `curve25519-dalek` + custom scalar multiply (preserves AOSP bit-255 / `left_shift3`); host tests vs BoringSSL oracle + Alice/Bob roundtrip — **not** RustCrypto `spake2`. Live Android 11+ wireless pair **not yet verified** on-device
+- [ ] Negative tests: wrong code, expired port, bad cert, altered transcript, truncated, reconnect (partial host coverage only)
+- [x] mDNS via ArkTS `@ohos.net.mdns`: `_adb-tls-pairing._tcp` / `_adb-tls-connect._tcp` (no trailing `.` — OHOS quirk) + DeviceEditor manual/QR UI (`仅配对` / `配对并填充 ADB 端口`); live LAN discovery unverified on emu
 
 ### Phase 4 — Existing server artifact and session transport
 
-- [ ] Reproduce `ClientStream.startServer()` path/versioning/rm/push/`app_process` options
-- [ ] `scripts/copy_server_jar.sh` from Android Gradle output → `rawfile/`
-- [ ] Dual TCP main+video, 15s timeout/retry; ADB `tcp:<serverPort>` fallback
-- [ ] Main/video framing parsers
+- [x] Reproduce `ClientStream.startServer()` path/versioning/rm/push/`app_process` options (`adb_client::server_launch`)
+- [x] `scripts/copy_server_jar.sh` from Android Gradle/`res/raw` → `rawfile/` + `easycontrolnext_server.version` (app `versionCode`)
+- [x] Dual TCP main+video, 15s timeout/retry; ADB `tcp:<serverPort>` fallback (`gate_d` host binary)
+- [x] Main/video framing parsers (video header + length-prefixed CSD; control keepalive write)
 - [ ] Fake-server integration test (no phone)
+- [x] ArkTS session orchestration wiring (`LiveMirror.ets` + Session live-or-fixture; Gate B strip unchanged)
 
 ### Phase 5 — Media and control UI
 
-- [ ] AVCodec Kit + XComponent H.264 low-latency decode (not AVPlayer)
-- [ ] Full-screen UIAbility MVP; metrics: first frame, e2e latency, drops, orientation, 30 min
-- [ ] Touch/keys/keepalive/resolution/rotation/backlight/power/clipboard via control contract
+- [x] Video stream framing (Rust `protocol::video` + NAPI): header + length-prefixed CSD + PTS-prefixed AUs; host tests + synthetic fixture inject
+- [x] **U5** Session fullscreen shell: black + XComponent; folded bottom bar / expanded side rail; Home Connect → Session
+- [x] Touch → `encode_control_touch` + live main-socket write when streaming (`liveSessionWriteControl`)
+- [x] AVCodec Kit + XComponent H.264 low-latency **decode to pixels** — Rust `ohos_vdec` FFI (`OH_VideoDecoder` + `OH_NativeWindow_CreateNativeWindowFromSurfaceId`); Session injects `rawfile/fixture_avc_easycontrol.bin`; first frame PASS on foldable emu (HiLog `FIRST_FRAME_OK`, UI `首帧已渲染 · 320x180`)
+- [ ] Full-screen session metrics: first frame, e2e latency, drops, orientation, 30 min
+- [x] Live main/video sockets from HarmonyOS (Gate D on-device) feeding the decoder — NAPI `liveSessionStart/Status/WriteControl/Stop`; streaming `ohos_vdec::start_live_stream` + `push_access_unit`; **emu cannot reach LAN Android** (see Gate E / run log)
+- [x] Session extras polish: screenshot (`adbScreencapPng`), app picker (`adbShellExec` + monkey), ADB sync file pull (`adbSyncPull` → app `filesDir`)
+- [ ] Keys/keepalive/resolution/rotation/backlight/power/clipboard via control contract (keepalive+touch+power/rotate/light/clipboard wired; full metrics still open)
 - [ ] H.265 Main/Main10 negotiation only after H.264 stable
 - [ ] Opus/AAC later; AVSession only if background audio is actually supported
 
 ### Phase 6 — ArkUI product parity
 
-- [ ] Device list, editor, presets, settings, diagnostics, app picker, fullscreen controller
-- [ ] Navigation/NavPathStack, typed state, relationalStore, preferences, permissions
-- [ ] Responsive phone/tablet/2in1; no floatView/USB blockers for MVP
+- [x] **U0** Design tokens (`color.json` / `float.json` + `resources/dark`): accent `#3A70FC`, bg `#F2F3F5`, surfaces, radii 20/24vp
+- [x] **U1** AppShell (`ets/shell/AppShell.ets`): Navigation + NavPathStack, no bottom Tabs; Index is thin entry
+- [x] **U2** Home (`ets/pages/Home.ets`): sm list+FAB · preferSplit list|detail; mock devices; settings/add/edit → real destinations
+- [x] Gate B probe migrated to `components/GateBDebugStrip.ets` (not whole Index page)
+- [x] **U3** Device Editor (`ets/pages/DeviceEditor.ets`): name/host/ADB+server ports + pairing + video (maxSize/fps/H.265/fullscreen) + connect-on-start; Save → RDB `DeviceStore`; Save&Connect; sm section chips · preferSplit section nav|form
+- [x] **U4** Settings lite (`ets/pages/Settings.ets`): about/version, language stub, presets → `Presets` page, logs placeholder; sm stacked · preferSplit category|content
+- [x] **U5** Session fullscreen shell (XComponent + fold controls; fixture → OH_VideoDecoder first frame)
+- [x] Device list persistence via `relationalStore` (`data/DeviceDb.ets` + `DeviceStore`); presets lite + session app picker wired; diagnostics still open
+- [x] Home manage sheet (Android parity): Connect / Apply preset (session-only) / Temp start app → virtual display `startApp` / Use camera → `videoSource=camera` / Edit / Delete
+- [x] Presets lite (`ets/pages/Presets.ets` + `ConnectionPreset`/`PresetStore`): 3 built-ins; apply links `presetId` + stream fields to device
+- [x] Navigation/NavPathStack shell + typed Device model + shared `DeviceStore`
+- [x] relationalStore device wiring (`DevicesDb` + `presetId`/`connectOnStart`/`changeToFullOnConnect`, `deviceStoreRevision`); preferences still open
+- [ ] Responsive phone/tablet/2in1 polish beyond foldable Home; no floatView/USB blockers for MVP
+- [x] Foldable-first layout helper (`entry/.../common/Breakpoint.ets`: sm/md/lg + fold posture + preferSplit)
+- [x] Home reacts to fold/unfold via `startLayoutWatch` / `preferSplit` if/else (verify on foldable emulator `127.0.0.1:5559`)
+
+**Android UI reference (for ArkUI parity)**
+
+- Product: 易控•远程控制Next — **no bottom tabs**; Compose `NavHost` stack + out-of-stack session.
+- Screens: Home (list/detail) · Device editor · Settings · Presets · Error logs · Full session · Small/Mini float (defer on Harmony).
+- Theme: M3, accent `#3A70FC`, soft gray bg `#F2F3F5`, cards 20–24dp radius; session chrome near-black.
+- Adaptive already on Android: Compact single-column ↔ Medium+ panes — map to foldable folded/expanded.
+- Living inventory: Cursor canvas tab **Android UI** (`harmony-controller-port-analysis.canvas.tsx`). Device-mgmt: manage sheet, editor video/startup, presets lite, camera + VD temp-app wired; still open: custom preset CRUD, full stream/options parity, error logs, float views.
+
+**Foldable UI rules (binding constraint — primary test device is a foldable emulator)**
+
+| Rule | Detail |
+|---|---|
+| Primary device | Foldable emulator (`hdc` `127.0.0.1:5559`, API 24); current posture often `EXPAND` |
+| Layout switch | `if/else` on breakpoint / fold posture — **not** `.visibility(None)` |
+| Folded (`sm` / FOLDED) | Single column: device list → push detail/session |
+| Expanded / half | Prefer split or master–detail when `preferSplit`; session can share width with device list |
+| Listeners | `display.on('change')` + `foldStatusChange`; unregister in `aboutToDisappear` |
+| Session page | Video surface + controls must reflow on fold without tearing down ADB session |
+| Navigation | Prefer `Navigation` Auto/Split over fixed phone-only stacks |
 
 ### Phase 7 — Hardening and parity
 
@@ -219,11 +258,11 @@ harmonyos/
 
 | Gate | Criteria | Status |
 |---|---|---|
-| **A** | `cargo test` in `native/` (host) passes | **PASS** (protocol 22 + adb_client 13 = 35, 2026-08-12) |
-| **B** | Rust OHOS arm64 `.so` builds; ArkTS calls binary-safe export on device/emulator | **.so rebuildable**; ArkTS not wired into Index (API 24 device/SDK run still pending) |
-| **C** | ADB interop: shell, push/hash, tcp service vs Android | **Host fake daemon PASS**; real Android device pending |
-| **D** | Existing Android server launches from HarmonyOS; accepts main+video sockets | Phase 4 |
-| **E** | H.264 first frame + touch control | Phase 5 |
+| **A** | `cargo test` in `native/` (host) passes | **PASS** (protocol 22 + adb_client unit/integration incl. RSA) |
+| **B** | Rust OHOS arm64 `.so` builds; ArkTS calls binary-safe export on device/emulator | **PASS** (foldable emu `127.0.0.1:5559`) |
+| **C** | ADB interop: shell, push/hash, tcp service vs Android | **PASS** (2026-08-12, RSA new key + real marble device TCP 5555) |
+| **D** | Existing Android server launches; accepts main+video sockets | **PASS** (host `gate_d` re-verified 2026-08-12 vs `192.168.31.60:5555`). On-device path wired via `liveSession*` NAPI + Session UX. |
+| **E** | H.264 first frame + touch control | **PARTIAL** — fixture first-frame PASS. **Live path code complete** + on-emu bring-up reached `streaming 720x1600 via direct` (HiLog `LiveMirror` → status streaming) against LAN `192.168.31.60`, but **live first-frame pixels not confirmed** within poll window (emu↔LAN RTT can be multi-second; then Session fell back to fixture `FIRST_FRAME_OK`). Touch write wired for direct main TCP. Prefer same-LAN HarmonyOS device for Gate E full PASS; optional host relay if emu path stays lossy. |
 | **F** | Pairing code flow Android 11+; survives reconnect | Phase 3 |
 | **G** | 30-minute stability; no leaked sockets/decoder/session | Phase 5/7 |
 
@@ -306,8 +345,14 @@ cargo install ohrs --locked
 export OHOS_NDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
 ./scripts/build_native_ohos.sh
 
-# Copy Android server artifact into rawfile (after Gradle server build)
+# Copy Android server artifact into rawfile (after Gradle server build / copyRelease)
 ./scripts/copy_server_jar.sh
+
+# Gate D — push/launch server + dual TCP against a real authorized Android device
+cd native
+export CARGO_HOME="$PWD/.cargo-home"
+cargo run -p easycontrol-adb-client --bin gate_d -- 192.168.31.60 5555
+# optional: --server-port 25166 --jar ../entry/src/main/resources/rawfile/easycontrolnext_server.jar
 ```
 
 ---
@@ -319,6 +364,21 @@ export OHOS_NDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openha
 | 2026-08-12 | Plan created; Phase 0–1 protocol + NAPI PoC; arm64 `.so` via NDK cargo fallback |
 | 2026-08-12 | API 24 `build-profile` reconciled as already `6.1.1(24)` — not overwritten |
 | 2026-08-12 | Phase 2 host session core: `adb_client` + fake daemon; 35 host tests PASS; arm64 `.so` rebuilt |
-| 2026-08-12 | Production RSA signer explicitly `PendingProductionSigner` (not faked as success) |
+| 2026-08-12 | `RsaAdbSigner` + `gate_c` binary; Gate C PASS on real Android TCP (`192.168.31.60:5555`) |
+| 2026-08-12 | Host PEM keys under `native/.adb-keys/` (gitignored); HUKS wrapping still open for HarmonyOS on-device |
+| 2026-08-12 | **Gate B PASS** on foldable emulator `127.0.0.1:5559` (API 24 arm64 EXPAND): signed HAP install + launch; HiLog `GateB` `nativeVersion=0.1.0` + roundTrip OK; product `signingConfig: "default"` wired to auto-signing materials |
+| 2026-08-12 | **Phase 6 U0–U2**: design tokens + AppShell Navigation + foldable Home; Gate B probe → `GateBDebugStrip`; placeholder routes for settings / device editor |
+| 2026-08-12 | **Phase 6 U3–U4**: DeviceEditor form + Settings lite; `DeviceStore` in-memory upsert; Home refresh via `deviceStoreRevision`; signed HAP on foldable emu `127.0.0.1:5559` |
+| 2026-08-12 | Phase 4 host path: `copy_server_jar.sh` → rawfile + version sidecar (`app_version_code=10014`); `adb_client::server_launch` + `gate_d` |
+| 2026-08-12 | **Gate D PASS** (host) on marble `192.168.31.60:5555`: push `easycontrolnext_server_10014.jar` → `app_process` → direct main+video `:25166` → video header `720x1600` AVC + keepalive |
+| 2026-08-12 | **Phase 5 partial / Gate E partial**: `protocol::video` AU framing + NAPI; U5 Session (XComponent, fold chrome); Home Connect → Session; synthetic fixture inject proves framing; touch→`encode_control_touch`; **no first-frame pixels** yet (OH_VideoDecoder C-only) |
+| 2026-08-12 | **Gate E first-frame PASS** (fixture path): `native/adb_core/src/ohos_vdec.rs` → NAPI `videoDecoderPlayBitstream`; XComponent `surfaceId` → NativeWindow → `OH_VideoDecoder` AVC; rawfile `fixture_avc_easycontrol.bin` (libx264 320x180); HiLog `SessionDecode FIRST_FRAME_OK`; screenshot `gate_e_first_frame.jpeg` |
+| 2026-08-12 | **On-device Gate D wiring**: `adb_client::dual_connect`, `adb_core::live_session` + NAPI `liveSession*`, streaming `ohos_vdec` start/push AU; rawfile jar + `adb_rsa_key.pem/.pub`; `INTERNET` permission; Session live-or-fixture + touch→main. Host `gate_d` re-PASS. Emu Connect → live `streaming 720x1600 via direct` then fixture fallback when first frame slow. |
+| 2026-08-12 | **ADB sync pull**: `adb_client::sync_pull` (RECV/DATA/DONE/FAIL, 32 MiB cap) + FakeDaemon RECV + host tests; NAPI `adbSyncPull`; Session path sheet → save under `filesDir`; HAP rebuilt/installed on foldable emu `127.0.0.1:5559`. Device list still in-memory (`relationalStore` open). Phase 3 pairing untouched. |
+| 2026-08-12 | **relationalStore devices**: `data/DeviceDb.ets` (`DevicesDb` CREATE IF NOT EXISTS + CRUD); `DeviceStore` cache+RDB; init in `EntryAbility`/`AppShell`; Home `deviceStoreRevision`; pairing stubs `pairPort`/`pairKey` preserved by DeviceEditor; seed mocks only when empty. Verified on foldable emu `127.0.0.1:5559`: cold restart `loaded 3 devices` (no re-seed) + Home shows `LabPersist` / `10.8.8.8:5555`. |
+| 2026-08-12 | **Phase 3 pairing MVP**: BoringSSL-compatible SPAKE2 (host oracle PASS) + rustls pairing TLS/framing/HKDF/AES-GCM/peer-info; NAPI `adbPairWireless`; ArkTS mDNS + DeviceEditor「仅配对」/「配对并填充」/QR. A_STLS session TLS + live Android pair + negative tests still open. |
 
-**Next milestone:** Gate B on device/emulator (optional ArkTS probe from `native/arkts` after staging `.so`); Gate C on a real pre-authorized Android device; implement production RSA/ADB public-key encoding + HUKS wrapping behind `AdbSigner`.
+| 2026-08-12 | **Device-mgmt parity**: Home manage sheet (Connect/Edit/Delete/session preset/temp app/camera toast); DeviceEditor video+connectOnStart; Presets lite (3 built-ins, link `presetId`); DeviceDb columns `presetId`/`connectOnStart`/`changeToFullOnConnect`; SessionLaunch overrides. |
+| 2026-08-12 | **Camera + virtual-display temp app**: Device → LiveMirror → `app_process` (`videoSource`/`cameraFacing`/`startApp`/VD size); SDK gates API 31+/30+. Fixes: NAPI passes source/`startApp` as discrete string args (object fields were dropped); `connect_dual` ignores MIUI non-fatal theme `FileNotFoundException`. Verified VD `startApp=com.kroegerama.appchecker` + `easycontrol` display on marble. |
+
+**Next milestone:** live pair vs Android 11+ wireless debugging (e.g. `192.168.31.60`); A_STLS session TLS connect; live camera first-frame confirmation; Gate E metrics; HUKS; preferences.

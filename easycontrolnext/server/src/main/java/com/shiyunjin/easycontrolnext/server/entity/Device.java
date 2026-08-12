@@ -330,17 +330,50 @@ public final class Device {
   }
 
   public static void changePower(int mode) {
-    if (mode == -1) keyEvent(26, 0);
-    else {
-      try {
-        String output = execReadOutput("dumpsys deviceidle | grep mScreenOn");
-        Boolean isScreenOn = null;
-        if (output.contains("mScreenOn=true")) isScreenOn = true;
-        else if (output.contains("mScreenOn=false")) isScreenOn = false;
-        if (isScreenOn != null && isScreenOn ^ (mode == 1)) Device.keyEvent(26, 0);
-      } catch (Exception ignored) {
+    if (mode == -1) {
+      keyEvent(26, 0);
+      return;
+    }
+    try {
+      Boolean isScreenOn = readIsScreenOn();
+      // mode 1 = want on, 0 = want off. Toggle POWER only when state disagrees.
+      // If dumpsys cannot be parsed (OEM variants), still wake for mode==1 —
+      // otherwise connect leaves a frozen lock-wallpaper mirror with dead touch.
+      if (isScreenOn == null) {
+        if (mode == 1) keyEvent(26, 0);
+        return;
+      }
+      if (isScreenOn ^ (mode == 1)) keyEvent(26, 0);
+    } catch (Exception ignored) {
+      if (mode == 1) {
+        try {
+          keyEvent(26, 0);
+        } catch (Exception ignored2) {
+        }
       }
     }
+  }
+
+  /** Best-effort screen-on probe across OEM dumpsys shapes. */
+  private static Boolean readIsScreenOn() {
+    try {
+      String idle = execReadOutput("dumpsys deviceidle | grep mScreenOn");
+      if (idle.contains("mScreenOn=true")) return true;
+      if (idle.contains("mScreenOn=false")) return false;
+    } catch (Exception ignored) {
+    }
+    try {
+      String power = execReadOutput("dumpsys power");
+      if (power.contains("mWakefulness=Awake") || power.contains("mWakefulness=awake")) return true;
+      if (power.contains("mWakefulness=Asleep") || power.contains("mWakefulness=asleep")
+        || power.contains("mWakefulness=Dozing") || power.contains("mWakefulness=dozing")) {
+        return false;
+      }
+      if (power.contains("mScreenOnFully=true")) return true;
+      if (power.contains("mScreenOnFully=false")) return false;
+    } catch (Exception ignored) {
+    }
+    return null;
   }
 
   public static void rotateDevice() {

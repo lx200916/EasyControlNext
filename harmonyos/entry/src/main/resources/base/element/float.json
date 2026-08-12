@@ -3,6 +3,50 @@
     {
       "name": "page_text_font_size",
       "value": "28fp"
+    },
+    {
+      "name": "radius_sm",
+      "value": "8vp"
+    },
+    {
+      "name": "radius_md",
+      "value": "16vp"
+    },
+    {
+      "name": "radius_device_card",
+      "value": "20vp"
+    },
+    {
+      "name": "radius_detail_panel",
+      "value": "24vp"
+    },
+    {
+      "name": "radius_fab",
+      "value": "28vp"
+    },
+    {
+      "name": "space_page_h",
+      "value": "20vp"
+    },
+    {
+      "name": "space_list_gap",
+      "value": "12vp"
+    },
+    {
+      "name": "space_section",
+      "value": "16vp"
+    },
+    {
+      "name": "home_list_pane_ratio",
+      "value": "0.36"
+    },
+    {
+      "name": "fab_size",
+      "value": "56vp"
+    },
+    {
+      "name": "debug_strip_height",
+      "value": "28vp"
     }
   ]
 }

@@ -47,17 +47,11 @@ if [[ ! -x "$LLVM_BIN/clang" ]]; then
   exit 1
 fi
 
-# Minimal cargo config for this invocation (does not require global ~/.cargo mutation).
-TMP_CFG="$(mktemp)"
-cat >"$TMP_CFG" <<EOF
-[target.$TARGET]
-linker = "$LLVM_BIN/clang"
-ar = "$LLVM_BIN/llvm-ar"
-rustflags = [
-  "-C", "link-arg=--target=$TARGET",
-  "-C", "link-arg=--sysroot=$SYSROOT",
-]
-EOF
+# ring / cc-rs need the OHOS clang + sysroot (host `cc` lacks assert.h for this target).
+export CC_aarch64_unknown_linux_ohos="$LLVM_BIN/clang"
+export AR_aarch64_unknown_linux_ohos="$LLVM_BIN/llvm-ar"
+export CFLAGS_aarch64_unknown_linux_ohos="--target=$TARGET --sysroot=$SYSROOT"
+export CXXFLAGS_aarch64_unknown_linux_ohos="--target=$TARGET --sysroot=$SYSROOT"
 
 echo "==> cargo build -p adb_core --release --target $TARGET"
 cargo build --manifest-path "$NATIVE/Cargo.toml" -p adb_core --release --target "$TARGET" \
@@ -73,7 +67,5 @@ if [[ -f "$OUT" ]]; then
   echo "==> copied $OUT -> $DEST_DIR/libadb_core.so"
 else
   echo "error: expected artifact missing: $OUT" >&2
-  rm -f "$TMP_CFG"
   exit 1
 fi
-rm -f "$TMP_CFG"

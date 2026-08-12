@@ -1,7 +1,7 @@
 /**
  * Typed device model for the HarmonyOS controller.
  * Field semantics align with Android `entity/Device.java` for protocol/session options.
- * Persistence via relationalStore is Phase 6.
+ * Persisted via `data/DeviceDb.ets` (relationalStore).
  */
 export type VideoSource = 'display' | 'camera';
 export type CameraFacing = 'front' | 'back';
@@ -14,6 +14,12 @@ export class Device {
   /** ADB / connect port (wireless debugging). */
   adbPort: number = 5555;
   serverPort: number = 25166;
+  /** Wireless pairing port (0 = unset). Written by pairing UI / Phase 3. */
+  pairPort: number = 0;
+  /** Pairing code/key stub. Written by pairing UI / Phase 3. */
+  pairKey: string = '';
+  /** Linked connection preset id, or empty when custom / detached (Android Device.presetId). */
+  presetId: string = '';
   useH265: boolean = false;
   hevcProfile: HevcPref = 'main';
   isAudio: boolean = false;
@@ -22,6 +28,24 @@ export class Device {
   maxVideoBit: number = 4;
   listenClip: boolean = true;
   keepWakeOnRunning: boolean = true;
+  /** Auto-connect this device when the controller app starts. */
+  connectOnStart: boolean = false;
+  /** Prefer fullscreen session chrome on connect (parity flag; Harmony session is fullscreen). */
+  changeToFullOnConnect: boolean = false;
+  /** After live main socket is up, send power wake (Android Client.buttonWake). */
+  wakeOnConnect: boolean = true;
+  /** After connect, turn controlled display backlight off (delayed). */
+  lightOffOnConnect: boolean = false;
+  /** Initial session nav-bar visibility (controller chrome). */
+  showNavBarOnConnect: boolean = true;
+  /** Send fixed WxH resolution control event after connect. */
+  customResolutionOnConnect: boolean = false;
+  customResolutionWidth: number = 1080;
+  customResolutionHeight: number = 2400;
+  /** On session close: lock controlled device (power mode 0). */
+  lockOnClose: boolean = true;
+  /** On session close: restore backlight when not locking. */
+  lightOnClose: boolean = false;
   videoSource: VideoSource = 'display';
   cameraFacing: CameraFacing = 'back';
   virtualWidth: number = 0;

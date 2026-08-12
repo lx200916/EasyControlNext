@@ -20,6 +20,14 @@
 /native/**/dist
 /native/.cargo/config.toml
 /native/.cargo-home
+/native/.adb-keys/
 entry/libs/
 entry/src/main/resources/rawfile/*.jar
 entry/src/main/resources/rawfile/*.jar.sha256
+# Keep easycontrolnext_server.version (small sidecar) trackable when desired.
+entry/src/main/resources/rawfile/adb_rsa_key.pem
+entry/src/main/resources/rawfile/adb_rsa_key.pub
+/tmp/
+*.jpeg
+*.jpg
+

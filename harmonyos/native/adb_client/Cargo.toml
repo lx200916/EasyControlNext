@@ -10,5 +10,26 @@ publish = false
 [dependencies]
 easycontrol-protocol = { workspace = true }
 sha2 = { workspace = true }
+sha1 = { workspace = true }
+rsa = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
+num-bigint-dig = { workspace = true }
+num-traits = { workspace = true }
+curve25519-dalek = { workspace = true }
+zeroize = { workspace = true }
+hkdf = { workspace = true }
+aes-gcm = { workspace = true }
+rustls = { workspace = true }
+rustls-pki-types = { workspace = true }
+rcgen = { workspace = true }
+
+[[bin]]
+name = "gate_c"
+path = "src/bin/gate_c.rs"
+
+[[bin]]
+name = "gate_d"
+path = "src/bin/gate_d.rs"
 
 [dev-dependencies]

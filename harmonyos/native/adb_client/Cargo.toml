@@ -1,0 +1,14 @@
+[package]
+name = "easycontrol-adb-client"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "ADB TCP session / stream multiplexer for the HarmonyOS controller (host-testable)"
+publish = false
+
+[dependencies]
+easycontrol-protocol = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]

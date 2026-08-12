@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.shiyunjin.easycontrolnext.server.helper.CameraCapture;
 import com.shiyunjin.easycontrolnext.server.helper.ControlPacket;
 import com.shiyunjin.easycontrolnext.server.helper.VideoEncode;
 import com.shiyunjin.easycontrolnext.server.wrappers.ClipboardManager;
@@ -39,10 +40,27 @@ public final class Device {
   public static Pair<Integer, Integer> videoSize;
   private static boolean needReset = false;
   private static int oldScreenOffTimeout = 60000;
+  private static int movedAppStackId = -1;
 
   public static void init() throws Exception {
-    // 若启动单个应用则需创建虚拟Dispaly
+    if (Options.isCameraSource()) {
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        throw new Exception("Camera mirroring requires Android 12+");
+      }
+      CameraCapture.prepare();
+      displayInfo = new DisplayInfo(Display.DEFAULT_DISPLAY, videoSize.first, videoSize.second, 0, 160, 0);
+      getRealSize();
+      setRotationListener();
+      if (Options.listenerClip) setClipBoardListener();
+      if (Options.keepAwake) setKeepScreenLight();
+      return;
+    }
+
+    // 单应用投屏：创建虚拟 Display（Android 11+）
     if (!Objects.equals(Options.startApp, "")) {
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+        throw new Exception("Single-app virtual display requires Android 11+");
+      }
       virtualDisplay = DisplayManager.createVirtualDisplay();
       displayId = virtualDisplay.getDisplay().getDisplayId();
       startAndMoveAppToVirtualDisplay();
@@ -58,22 +76,56 @@ public final class Device {
     if (Options.keepAwake) setKeepScreenLight();
   }
 
+  public static int getDisplayId() {
+    return displayId;
+  }
+
   // 打开并移动应用
   private static void startAndMoveAppToVirtualDisplay() throws IOException, InterruptedException {
     int appStackId = getAppStackId();
     if (appStackId == -1) {
-      Device.execReadOutput("monkey -p " + Options.startApp + " -c android.intent.category.LAUNCHER 1");
-      appStackId = getAppStackId();
+      // Launch then poll until the task appears
+      try {
+        Device.execReadOutput("monkey -p " + Options.startApp + " -c android.intent.category.LAUNCHER 1");
+      } catch (Exception ignored) {
+        // Some devices reject monkey; try am start on the virtual display
+        try {
+          Device.execReadOutput("am start --display " + displayId
+            + " -a android.intent.action.MAIN -c android.intent.category.LAUNCHER " + Options.startApp);
+        } catch (Exception ignored2) {
+        }
+      }
+      for (int i = 0; i < 15 && appStackId == -1; i++) {
+        Thread.sleep(200);
+        appStackId = getAppStackId();
+      }
     }
-    if (appStackId == -1) throw new IOException("error app");
+    if (appStackId == -1) throw new IOException("error app: cannot find stack for " + Options.startApp);
     Device.execReadOutput("am display move-stack " + appStackId + " " + displayId);
+    movedAppStackId = appStackId;
   }
 
+  /**
+   * Resolve RootTask/Stack id that owns {@link Options#startApp}.
+   * Falls back to taskId when stack id cannot be parsed (OEM variants).
+   */
   private static int getAppStackId() throws IOException, InterruptedException {
     String amStackList = Device.execReadOutput("am stack list");
-    Matcher m = Pattern.compile("taskId=([0-9]+): " + Options.startApp).matcher(amStackList);
-    if (!m.find()) return -1;
-    return Integer.parseInt(Objects.requireNonNull(m.group(1)));
+    String pkg = Pattern.quote(Options.startApp);
+
+    // RootTask id=5 ... taskId=12: com.pkg/...
+    // Stack id=1 ... taskId=3: com.pkg/...
+    Pattern stackWithPkg = Pattern.compile(
+      "(?:RootTask|Stack)\\s+id=(\\d+)[\\s\\S]*?taskId=\\d+:\\s*" + pkg + "(?:/|\\s|$)",
+      Pattern.CASE_INSENSITIVE);
+    Matcher stackMatcher = stackWithPkg.matcher(amStackList);
+    if (stackMatcher.find()) {
+      return Integer.parseInt(Objects.requireNonNull(stackMatcher.group(1)));
+    }
+
+    Matcher taskMatcher = Pattern.compile("taskId=([0-9]+):\\s*" + pkg).matcher(amStackList);
+    if (!taskMatcher.find()) return -1;
+    return Integer.parseInt(Objects.requireNonNull(taskMatcher.group(1)));
   }
 
   private static void getRealSize() throws IOException, InterruptedException {
@@ -107,6 +159,7 @@ public final class Device {
 
   // 修改分辨率
   public static void changeResolution(float targetRatio) {
+    if (Options.isCameraSource()) return;
     try {
       // 安全阈值(长宽比最多三倍)
       if (targetRatio > 3 || targetRatio < 0.34) return;
@@ -132,6 +185,7 @@ public final class Device {
 
   // 修改分辨率
   public static void changeResolution(int width, int height) {
+    if (Options.isCameraSource()) return;
     try {
       float originalRatio = (float) realSize.first / realSize.second;
       // 安全阈值(长宽比最多三倍)
@@ -157,13 +211,31 @@ public final class Device {
     }
   }
 
-  // 恢复分辨率
+  // 恢复分辨率 / 虚拟屏
   public static void fallbackResolution() throws IOException, InterruptedException {
     if (Device.needReset) {
       if (virtualDisplay != null) {
-        int appStackId = getAppStackId();
-        if (appStackId == -1) Device.execReadOutput("am display move-stack " + appStackId + " " + Display.DEFAULT_DISPLAY);
-        virtualDisplay.release();
+        // Move the app stack back to the default display before releasing the VD.
+        // Research noted this condition was inverted (== -1); fixed to != -1.
+        int appStackId = movedAppStackId;
+        if (appStackId == -1) {
+          try {
+            appStackId = getAppStackId();
+          } catch (Exception ignored) {
+          }
+        }
+        if (appStackId != -1) {
+          try {
+            Device.execReadOutput("am display move-stack " + appStackId + " " + Display.DEFAULT_DISPLAY);
+          } catch (Exception ignored) {
+          }
+        }
+        try {
+          virtualDisplay.release();
+        } catch (Exception ignored) {
+        }
+        virtualDisplay = null;
+        movedAppStackId = -1;
       } else {
         if (Device.realSize != null) Device.execReadOutput("wm size " + Device.realSize.first + "x" + Device.realSize.second);
         else Device.execReadOutput("wm size reset");
@@ -193,6 +265,7 @@ public final class Device {
   }
 
   private static void setRotationListener() {
+    if (Options.isCameraSource()) return;
     WindowManager.registerRotationWatcher(new IRotationWatcher.Stub() {
       public void onRotationChanged(int rotation) {
         updateSize();
@@ -204,6 +277,7 @@ public final class Device {
   private static final PointersState pointersState = new PointersState();
 
   public static void touchEvent(int action, Float x, Float y, int pointerId, int offsetTime) {
+    if (Options.isCameraSource()) return;
     Pointer pointer = pointersState.get(pointerId);
 
     if (pointer == null) {
@@ -270,6 +344,7 @@ public final class Device {
   }
 
   public static void rotateDevice() {
+    if (Options.isCameraSource()) return;
     boolean accelerometerRotation = !WindowManager.isRotationFrozen(displayId);
     WindowManager.freezeRotation(displayId, (displayInfo.rotation == 0 || displayInfo.rotation == 3) ? 1 : 0);
     if (accelerometerRotation) WindowManager.thawRotation(displayId);

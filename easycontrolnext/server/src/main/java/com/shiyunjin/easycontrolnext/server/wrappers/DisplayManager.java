@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 
 import com.shiyunjin.easycontrolnext.server.entity.Device;
 import com.shiyunjin.easycontrolnext.server.entity.DisplayInfo;
+import com.shiyunjin.easycontrolnext.server.entity.Options;
 import com.shiyunjin.easycontrolnext.server.helper.FakeContext;
 
 public final class DisplayManager {
@@ -74,32 +75,46 @@ public final class DisplayManager {
       throw new Exception("Virtual display is not supported before Android 11");
     }
 
-    int flags = android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC | android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY | VIRTUAL_DISPLAY_FLAG_DESTROY_CONTENT_ON_REMOVAL | android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) flags |= VIRTUAL_DISPLAY_FLAG_TRUSTED | VIRTUAL_DISPLAY_FLAG_OWN_DISPLAY_GROUP | VIRTUAL_DISPLAY_FLAG_ALWAYS_UNLOCKED;
+    int width = Options.virtualWidth > 0 ? Options.virtualWidth : realDisplayinfo.width;
+    int height = Options.virtualHeight > 0 ? Options.virtualHeight : realDisplayinfo.height;
+    int dpi = Options.virtualDpi > 0 ? Options.virtualDpi : realDisplayinfo.density;
+    // Keep encoder-friendly dimensions
+    width = width + 8 & ~15;
+    height = height + 8 & ~15;
+    if (width < 160) width = 160;
+    if (height < 160) height = 160;
+
+    int flags = android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
+      | android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
+      | VIRTUAL_DISPLAY_FLAG_DESTROY_CONTENT_ON_REMOVAL
+      | android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      flags |= VIRTUAL_DISPLAY_FLAG_TRUSTED | VIRTUAL_DISPLAY_FLAG_OWN_DISPLAY_GROUP | VIRTUAL_DISPLAY_FLAG_ALWAYS_UNLOCKED;
+    }
 
     Surface surface = MediaCodec.createPersistentInputSurface();
-    android.hardware.display.DisplayManager displayManager = android.hardware.display.DisplayManager.class.getDeclaredConstructor(Context.class).newInstance(FakeContext.get());
-    return displayManager.createVirtualDisplay("easycontrol", realDisplayinfo.width, realDisplayinfo.height, realDisplayinfo.density, surface, flags);
+    android.hardware.display.DisplayManager displayManager =
+      android.hardware.display.DisplayManager.class.getDeclaredConstructor(Context.class).newInstance(FakeContext.get());
+    return displayManager.createVirtualDisplay("easycontrol", width, height, dpi, surface, flags);
   }
 
   private static Method createVirtualDisplayMethod;
   private static Method getCreateVirtualDisplayMethod() throws NoSuchMethodException {
     if (createVirtualDisplayMethod == null) {
       createVirtualDisplayMethod = android.hardware.display.DisplayManager.class
-              .getMethod("createVirtualDisplay", String.class, int.class, int.class, int.class, Surface.class);
+        .getMethod("createVirtualDisplay", String.class, int.class, int.class, int.class, Surface.class);
     }
     return createVirtualDisplayMethod;
   }
 
   public static VirtualDisplay createVirtualDisplay(String name, int width, int height, int displayIdToMirror, Surface surface) throws Exception {
     Method method = getCreateVirtualDisplayMethod();
-
     return (VirtualDisplay) method.invoke(null, name, width, height, displayIdToMirror, surface);
   }
 
   public VirtualDisplay createNewVirtualDisplay(String name, int width, int height, int dpi, Surface surface, int flags) throws Exception {
     Constructor<android.hardware.display.DisplayManager> ctor = android.hardware.display.DisplayManager.class.getDeclaredConstructor(
-            Context.class);
+      Context.class);
     ctor.setAccessible(true);
     android.hardware.display.DisplayManager dm = ctor.newInstance(FakeContext.get());
     return dm.createVirtualDisplay(name, width, height, dpi, surface, flags);

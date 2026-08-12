@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Fade-only Activity transitions: smooth without sliding the system bars. -->
+  <style name="Animation.EasyControl.Activity" parent="@android:style/Animation.Activity">
+    <item name="android:activityOpenEnterAnimation">@anim/activity_fade_in</item>
+    <item name="android:activityOpenExitAnimation">@anim/activity_hold</item>
+    <item name="android:activityCloseEnterAnimation">@anim/activity_hold</item>
+    <item name="android:activityCloseExitAnimation">@anim/activity_fade_out</item>
+  </style>
+</resources>

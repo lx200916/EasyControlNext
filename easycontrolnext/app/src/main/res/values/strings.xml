@@ -11,15 +11,114 @@
   <string name="main_scan_device_local">Local</string>
   <string name="main_device_type_network">Wireless</string>
   <string name="main_device_type_link">Wired</string>
+  <string name="main_menu">Menu</string>
+  <string name="main_menu_settings">Settings</string>
+  <string name="home_subtitle">LAN mirror · camera monitor</string>
+  <string name="home_device_count">%1$d devices</string>
+  <string name="home_select_device_title">Select a device</string>
+  <string name="home_select_device_hint">Choose a device from the list to connect or manage</string>
+  <string name="home_connect">Connect</string>
+  <string name="home_selected">Selected</string>
+
+  <!-- Connection presets -->
+  <string name="set_presets">Connection presets</string>
+  <string name="set_presets_detail">Manage mirroring profiles for remote, camera, and single-app</string>
+  <string name="preset_title">Connection presets</string>
+  <string name="preset_subtitle">Profiles for display, camera, and single-app mirroring</string>
+  <string name="preset_default_hint">Default preset fills and links new devices. Apply on a device links it; Manage → Apply preset is this session only. Editing a preset asks whether to update linked devices.</string>
+  <string name="preset_create">New preset</string>
+  <string name="preset_edit">Edit preset</string>
+  <string name="preset_save">Save</string>
+  <string name="preset_name">Preset name</string>
+  <string name="preset_name_required">Name cannot be empty</string>
+  <string name="preset_new_name">Custom preset</string>
+  <string name="preset_stream_section">Stream &amp; session options</string>
+  <string name="preset_builtin_normal">Normal remote</string>
+  <string name="preset_builtin_camera">Camera monitor</string>
+  <string name="preset_builtin_single_app">Single-app</string>
+  <string name="preset_badge_default">Default</string>
+  <string name="preset_badge_builtin">Built-in</string>
+  <string name="preset_set_default">Set default</string>
+  <string name="preset_duplicate">Duplicate</string>
+  <string name="preset_copy_suffix"> (copy)</string>
+  <string name="preset_delete">Delete</string>
+  <string name="preset_delete_title">Delete preset?</string>
+  <string name="preset_delete_message">Delete “%1$s”? This cannot be undone.</string>
+  <string name="preset_reset">Reset</string>
+  <string name="preset_reset_title">Reset built-in preset?</string>
+  <string name="preset_reset_message">Restore this built-in preset to factory options. It cannot be permanently deleted.</string>
+  <string name="preset_reset_done">Built-in preset reset</string>
+  <string name="preset_builtin_edit_hint">Built-in presets can be edited; use Reset on the list to restore factory values.</string>
+  <string name="preset_apply_section">Apply preset</string>
+  <string name="preset_apply_device_hint">Copies options onto this saved device and links it to the preset. Manual edits to stream options clear the link (device keeps your values). Save to persist.</string>
+  <string name="preset_apply">Apply preset</string>
+  <string name="preset_applied">Applied “%1$s”</string>
+  <string name="preset_picker_hint">Choose a preset to apply</string>
+  <string name="preset_link_status_linked">Linked: %1$s</string>
+  <string name="preset_link_status_custom">Custom (not linked to a preset)</string>
+  <string name="preset_detach">Detach from preset</string>
+  <string name="preset_detached">Detached — stream options are now custom for this device</string>
+  <string name="preset_update_linked_title">Update linked devices?</string>
+  <string name="preset_update_linked_message">Update %1$d device(s) still linked to “%2$s” with the new options? Detached/custom devices are not changed.</string>
+  <string name="preset_update_linked_confirm">Update devices</string>
+  <string name="preset_update_linked_keep">Keep devices as-is</string>
+  <string name="preset_linked_updated">Updated %1$d device(s)</string>
+  <string name="preset_linked_count_hint">%1$d saved device(s) currently linked. Saving can offer to update them.</string>
+  <string name="preset_video_source_detail">Display capture or remote camera (Android 12+)</string>
+  <string name="preset_camera_facing_detail">Default facing when video source is camera</string>
+  <string name="preset_start_app_hint">Leave empty as a template; pick a package on the device or in Manage</string>
+  <string name="preset_virtual_width">Width (0=default)</string>
+  <string name="preset_virtual_height">Height (0=default)</string>
+  <string name="manage_apply_preset">Apply preset</string>
+  <string name="manage_apply_preset_detail">This connection only — does not change saved device settings or the preset link</string>
+
+  <!-- Error log viewer -->
+  <string name="error_log_title">Error logs</string>
+  <string name="error_log_back">Back</string>
+  <string name="error_log_refresh">Refresh</string>
+  <string name="error_log_copy">Copy</string>
+  <string name="error_log_share">Share</string>
+  <string name="error_log_clear">Clear</string>
+  <string name="error_log_clear_title">Clear error logs?</string>
+  <string name="error_log_clear_message">This permanently deletes all locally stored error logs.</string>
+  <string name="error_log_cleared">Logs cleared</string>
+  <string name="error_log_copied">Copied to clipboard</string>
+  <string name="error_log_empty">No logs yet</string>
+  <string name="error_log_search">Search</string>
+  <string name="error_log_search_hint">Tag, message, stacktrace…</string>
+  <string name="error_log_filter_all">All</string>
+  <string name="error_log_filter_error">Errors</string>
+  <string name="error_log_filter_warn">Warnings</string>
+  <string name="error_log_count">Showing %1$d / %2$d</string>
+  <string name="error_log_selected">Selected</string>
+  <string name="error_log_tap_select">Select</string>
 
   <!-- 设置页面 -->
+  <string name="set_title">Settings</string>
+  <string name="set_subtitle">Presets, connection, language, and diagnostics</string>
+  <string name="set_back">Back</string>
+  <string name="set_section_connection">Connection</string>
+  <string name="set_section_general">General</string>
+  <string name="set_section_diagnostics">Diagnostics</string>
+  <string name="set_section_about">About</string>
+  <string name="set_section_connection_detail">Presets, IP addresses, and ADB keys</string>
+  <string name="set_section_general_detail">Language and app preferences</string>
+  <string name="set_section_diagnostics_detail">Error logs and troubleshooting</string>
+  <string name="set_section_about_detail">Version and project homepage</string>
   <string name="set_other_custom_key">Custom ADB key</string>
+  <string name="set_other_custom_key_detail">View or replace the local ADB key pair</string>
   <string name="set_other_reset_key">Reset ADB key</string>
+  <string name="set_other_reset_key_detail">Generate a new key pair and discard the current one</string>
   <string name="set_other_ip">IP addresses</string>
-  <string name="set_other_locale">Change language(中文/English)</string>
+  <string name="set_other_ip_detail">Show this device\'s IPv4 / IPv6 addresses</string>
+  <string name="set_other_locale">Change language (中文 / English)</string>
+  <string name="set_other_locale_detail">Toggle app language; restart may be required</string>
+  <string name="set_other_error_log">Error logs</string>
+  <string name="set_other_error_log_detail">Browse, filter, copy, or share local error logs</string>
   <string name="set_about_website">Homepage</string>
+  <string name="set_about_website_detail">Open the EasyControlNext GitHub repository</string>
   <string name="set_about_privacy">Privacy Policy</string>
-  <string name="set_about_version">Version: </string>
+  <string name="set_about_version">Version</string>
 
   <!-- 查看IP地址页面 -->
   <string name="ip_ipv4">IPv4(Touch to copy)</string>
@@ -31,14 +130,60 @@
   <string name="adb_key_button">Save</string>
 
   <!-- 设备添加页面 -->
+  <string name="device_editor_title_add">Add device</string>
+  <string name="device_editor_title_edit">Edit device</string>
+  <string name="device_editor_subtitle">Pair once, then connect directly</string>
+  <string name="device_editor_action_pair">Pair only (manual code)</string>
+  <string name="device_editor_action_save">Save</string>
+  <string name="device_editor_action_save_connect">Save &amp; connect</string>
+  <string name="device_editor_section_basic">Connection</string>
+  <string name="device_editor_section_pairing">Wireless pairing</string>
+  <string name="device_editor_section_preset">Preset</string>
+  <string name="device_editor_section_video">Video &amp; encoding</string>
+  <string name="device_editor_section_on_connect">On connect</string>
+  <string name="device_editor_section_on_running">While running</string>
+  <string name="device_editor_section_on_close">On disconnect</string>
+  <string name="device_editor_advanced_hint">All original EasyControl device options</string>
   <string name="device_uuid">Touch to copy ID</string>
   <string name="device_name">Name</string>
   <string name="device_name_hint">Can NOT be empty</string>
   <string name="device_address">Address</string>
   <string name="device_scan_device_list">Find the following address (click to populate)</string>
   <string name="device_address_hint">IPv4/v6 addresses or domain</string>
-  <string name="device_start_app">Just One App</string>
-  <string name="device_start_app_hint">If empty, will cast a screen.</string>
+  <string name="device_start_app">Single-app (virtual display)</string>
+  <string name="device_start_app_hint">Package name; empty = full screen. Requires Android 11+.</string>
+  <string name="device_pick_app">Pick app</string>
+  <string name="device_pick_app_refresh">Refresh</string>
+  <string name="device_pick_app_search">Search apps</string>
+  <string name="device_pick_app_include_system">Include system apps</string>
+  <string name="device_pick_app_manual">Manual package entry</string>
+  <string name="device_pick_app_need_adb">Fill IP and connect port first, and ensure the device is paired</string>
+  <string name="device_pick_app_empty">No apps found</string>
+  <string name="device_pick_app_loading">Loading apps…</string>
+  <string name="device_video_source">Video source</string>
+  <string name="device_video_source_display">Display</string>
+  <string name="device_video_source_camera">Camera (Android 12+)</string>
+  <string name="device_camera_facing">Camera facing</string>
+  <string name="device_camera_facing_back">Back</string>
+  <string name="device_camera_facing_front">Front</string>
+  <string name="device_virtual_size">Virtual display size (optional)</string>
+  <string name="device_virtual_dpi">Virtual DPI (0=default)</string>
+  <string name="toast_camera_android12">Camera mirroring requires Android 12+ on the controlled device</string>
+  <string name="toast_camera_failed">Camera mirroring failed: %1$s</string>
+  <string name="toast_virtual_display_android11">Single-app virtual display requires Android 11+</string>
+
+  <!-- Device manage (session) -->
+  <string name="manage_title">Manage</string>
+  <string name="manage_section_session">This connection only</string>
+  <string name="manage_section_session_hint">Does not change saved device settings</string>
+  <string name="manage_temp_app">Temporarily use an app</string>
+  <string name="manage_temp_app_detail">Pick an app, then mirror it on a virtual display for this session</string>
+  <string name="manage_temp_camera">Use camera</string>
+  <string name="manage_temp_camera_detail">Mirror the remote camera for this session (Android 12+)</string>
+  <string name="manage_camera_facing_title">Camera for this session</string>
+  <string name="manage_section_device">Device</string>
+  <string name="manage_edit">Edit</string>
+  <string name="manage_delete">Delete</string>
   <string name="device_adb_port">ADB Port</string>
   <string name="device_server_port">Server Port</string>
   <string name="device_pair_port">Pair Port</string>
@@ -89,6 +234,12 @@
   <string name="device_max_video_bit_detail">Set stream bitrate. Suggested = 4, high value may increases latency.</string>
   <string name="device_use_h265">H265</string>
   <string name="device_use_h265_detail">Enable H265 when available. Disable it when encountered display issues.</string>
+  <string name="device_hevc_profile">HEVC profile</string>
+  <string name="device_hevc_profile_detail">Bit depth for H.265. Main (8-bit) is enough for most cases; Main10 needs support on both devices.</string>
+  <string name="device_hevc_profile_auto">Auto (Main10 if available)</string>
+  <string name="device_hevc_profile_main">Main (8-bit)</string>
+  <string name="device_hevc_profile_main10">Main10 (10-bit)</string>
+  <string name="toast_hevc_main10_fallback">Main10 unavailable; falling back to Main (8-bit)</string>
   <string name="device_connect_on_start">Connect on start</string>
   <string name="device_connect_on_start_detail">Auto connect when the software starts, and multiple devices can be set.</string>
 

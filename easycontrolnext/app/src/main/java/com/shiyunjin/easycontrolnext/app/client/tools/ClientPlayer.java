@@ -10,7 +10,9 @@ import java.nio.ByteBuffer;
 
 import com.shiyunjin.easycontrolnext.app.client.Client;
 import com.shiyunjin.easycontrolnext.app.client.decode.AudioDecode;
+import com.shiyunjin.easycontrolnext.app.client.decode.DecodecTools;
 import com.shiyunjin.easycontrolnext.app.client.decode.VideoDecode;
+import com.shiyunjin.easycontrolnext.app.helper.AppErrorLog;
 import com.shiyunjin.easycontrolnext.app.helper.PublicTools;
 
 public class ClientPlayer {
@@ -71,6 +73,10 @@ public class ClientPlayer {
     try {
       boolean useH265 = clientStream.readByteFromVideo() == 1;
       Pair<Integer, Integer> videoSize = new Pair<>(clientStream.readIntFromVideo(), clientStream.readIntFromVideo());
+      AppErrorLog.w("hevc", "stream mime=" + (useH265 ? "HEVC" : "AVC")
+        + " size=" + videoSize.first + "x" + videoSize.second
+        + " decodeMain=" + DecodecTools.isSupportHevcMain()
+        + " decodeMain10=" + DecodecTools.isSupportHevcMain10());
       Surface surface = new Surface(clientController.getTextureView().getSurfaceTexture());
       ByteBuffer csd0 = clientStream.readFrameFromVideo();
       ByteBuffer csd1 = useH265 ? null : clientStream.readFrameFromVideo();

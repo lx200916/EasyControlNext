@@ -1,0 +1,24 @@
+/**
+ * EXAMPLE — copy into entry/src/main/ets/native/ after Gate B .so is staged:
+ *   ./scripts/build_native_ohos.sh
+ *   → entry/libs/arm64-v8a/libadb_core.so
+ *
+ * Then add a page that imports this module (do not leave the import in the
+ * default Index route until the .so is present; entry/libs is gitignored).
+ *
+ *   import adbCore from 'libadb_core.so';
+ *   const ver = adbCore.nativeVersion();
+ *   const echoed = adbCore.roundTripBytes(bytes);
+ */
+
+export interface AdbCoreNative {
+  nativeVersion: () => string;
+  roundTripBytes: (input: ArrayBuffer) => ArrayBuffer;
+  encodeAdbConnect: () => ArrayBuffer;
+  encodeAdbOkay: (localId: number, remoteId: number) => ArrayBuffer;
+  encodeAdbOpen: (localId: number, dest: string) => ArrayBuffer;
+  encodeControlKeepAlive: () => ArrayBuffer;
+  encodeControlTouch: (action: number, pointerId: number, x: number, y: number,
+    offsetTime: number) => ArrayBuffer;
+  encodeControlClipboard: (text: string) => ArrayBuffer;
+}

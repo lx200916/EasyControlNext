@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <!-- 主界面色彩 -->
-  <color name="background">#F3F4F6</color>
+  <!-- Keep in sync with SoftGrayBg / compose_window_background (#F2F3F5) -->
+  <color name="background">#F2F3F5</color>
   <color name="onBackground">#242424</color>
   <color name="onBackgroundSecond">#636564</color>
   <color name="cardBackground">#FFFFFF</color>

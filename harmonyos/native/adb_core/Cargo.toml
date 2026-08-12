@@ -1,0 +1,23 @@
+[package]
+name = "adb_core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "HarmonyOS Node-API bindings for EasyControl ADB/protocol core (ohos-rs)"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+easycontrol-protocol = { workspace = true }
+easycontrol-adb-client = { workspace = true }
+napi-ohos = { workspace = true }
+napi-derive-ohos = { workspace = true }
+
+[build-dependencies]
+napi-build-ohos = { workspace = true }
+
+[package.metadata.ohrs]
+# Consumed by `ohrs build` when available.

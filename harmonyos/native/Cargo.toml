@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = [
+  "protocol",
+  "adb_client",
+  "adb_core",
+]
+# Host tests: protocol + adb_client. Build adb_core via scripts/build_native_ohos.sh.
+default-members = ["protocol", "adb_client"]
+
+[workspace.package]
+edition = "2021"
+license = "GPL-3.0-or-later"
+authors = ["shiyunjin"]
+repository = "https://github.com/shiyunjin/EasyControlNext"
+
+[workspace.dependencies]
+napi-ohos = "1.2.0"
+napi-derive-ohos = "1.2.0"
+napi-build-ohos = "1.2.0"
+easycontrol-protocol = { path = "protocol" }
+easycontrol-adb-client = { path = "adb_client" }
+sha2 = "0.10"

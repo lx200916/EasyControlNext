@@ -22,6 +22,9 @@
 -keep class com.shiyunjin.easycontrolnext.server.Server {
     main(java.lang.String[]);
 }
+-keep class com.shiyunjin.easycontrolnext.server.helper.ListApps {
+    main(java.lang.String[]);
+}
 -keep class android.content.IOnPrimaryClipChangedListener{*;}
 -keep class android.view.IRotationWatcher{*;}
 -keep class com.shiyunjin.easycontrolnext.server.helper.FakeContext{*;}

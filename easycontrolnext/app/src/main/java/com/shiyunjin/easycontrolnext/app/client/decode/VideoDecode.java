@@ -87,6 +87,7 @@ public class VideoDecode {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && playHandler != null) {
       decodec.setCallback(callback, playHandler);
     } else decodec.setCallback(callback);
+    // Profile is carried in CSD (VPS/SPS); capability was gated client-side before requesting Main10.
     // 配置解码器
     decodec.configure(decodecFormat, surface, null, 0);
     // 启动解码器

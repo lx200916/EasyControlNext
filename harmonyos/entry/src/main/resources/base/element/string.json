@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "EasyControlNext entry module"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "EasyControlNext main ability"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "易控"
+    }
+  ]
+}

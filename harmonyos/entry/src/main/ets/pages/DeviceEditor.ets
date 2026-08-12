@@ -13,6 +13,7 @@ import {
   pairWirelessManual,
   pairWithQrCredentials,
 } from '../adb/AdbPairing';
+import { AppErrorLog } from '../common/AppErrorLog';
 import { CameraFacing, Device, VideoSource } from '../model/Device';
 import { DeviceStore } from '../model/DeviceStore';
 
@@ -397,6 +398,7 @@ export struct DeviceEditor {
     if (!result.ok) {
       this.pairStatus = result.detail;
       this.toast(result.detail.length > 0 ? result.detail : '配对失败');
+      AppErrorLog.e('pair', result.detail.length > 0 ? result.detail : '配对失败');
       return;
     }
     this.pairPortText = '';

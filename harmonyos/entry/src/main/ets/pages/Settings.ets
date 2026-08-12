@@ -1,11 +1,12 @@
 /**
- * U4 Settings lite — about/version, presets/logs stubs, language stub.
+ * U4 Settings lite — about/version, presets, error logs, language stub.
  * Gate B native probe lives under Diagnostics (not on Home primary chrome).
  * sm: grouped list; preferSplit: left category + right content.
  * Home 设置 tab embeds this with embedded=true (no NavDestination / back chrome).
  */
 
 import { GateBDebugStrip } from '../components/GateBDebugStrip';
+import { AppSettings } from '../common/AppSettings';
 
 const CAT_ABOUT: string = 'about';
 const CAT_GENERAL: string = 'general';
@@ -27,7 +28,11 @@ export struct Settings {
   @Prop tabBarInsetVp: number = 0;
   @State private category: string = CAT_ABOUT;
   @State private languageLabel: string = '跟随系统';
+  @State private sessionBackToRemote: boolean = true;
 
+  aboutToAppear(): void {
+    this.sessionBackToRemote = AppSettings.isSessionBackToRemote();
+  }
   private toast(message: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({
@@ -244,6 +249,30 @@ export struct Settings {
 
       Divider().color($r('app.color.divider')).margin({ left: 16 })
 
+      Row() {
+        Column({ space: 2 }) {
+          Text($r('app.string.settings_session_back_remote'))
+            .fontSize(16)
+            .fontColor($r('app.color.ink'))
+          Text($r('app.string.settings_session_back_remote_hint'))
+            .fontSize(12)
+            .fontColor($r('app.color.text_secondary'))
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+
+        Toggle({ type: ToggleType.Switch, isOn: this.sessionBackToRemote })
+          .selectedColor($r('app.color.brand_primary'))
+          .onChange((on: boolean) => {
+            this.sessionBackToRemote = on;
+            void AppSettings.setSessionBackToRemote(on);
+          })
+      }
+      .width('100%')
+      .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+
+      Divider().color($r('app.color.divider')).margin({ left: 16 })
+
       Text($r('app.string.settings_connection_hint'))
         .fontSize(12)
         .fontColor($r('app.color.text_secondary'))
@@ -257,7 +286,8 @@ export struct Settings {
   @Builder
   private diagnosticsContent() {
     Column({ space: 0 }) {
-      this.settingsRow($r('app.string.settings_error_logs'), '即将推出', false, () => {
+      this.settingsRow($r('app.string.settings_error_logs'), '浏览、筛选、复制本机错误日志', true, () => {
+        this.pathStack.pushPath({ name: 'error_logs' });
       })
 
       Divider().color($r('app.color.divider')).margin({ left: 16 })

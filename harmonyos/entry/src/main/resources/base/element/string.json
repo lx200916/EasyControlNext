@@ -435,6 +435,14 @@
       "value": "使用内置预设快速调整画质与帧率，可应用到已保存设备。"
     },
     {
+      "name": "settings_session_back_remote",
+      "value": "系统返回发送到被控端"
+    },
+    {
+      "name": "settings_session_back_remote_hint",
+      "value": "开启后，控制页按系统返回会注入远端返回键；关闭则退出控制页"
+    },
+    {
       "name": "presets_title",
       "value": "连接预设"
     },
@@ -453,6 +461,42 @@
     {
       "name": "settings_error_logs",
       "value": "错误日志"
+    },
+    {
+      "name": "settings_error_logs_detail",
+      "value": "浏览、筛选、复制本机错误日志"
+    },
+    {
+      "name": "error_log_title",
+      "value": "错误日志"
+    },
+    {
+      "name": "error_log_empty",
+      "value": "暂无日志"
+    },
+    {
+      "name": "error_log_filter_all",
+      "value": "全部"
+    },
+    {
+      "name": "error_log_filter_error",
+      "value": "错误"
+    },
+    {
+      "name": "error_log_filter_warn",
+      "value": "警告"
+    },
+    {
+      "name": "error_log_clear",
+      "value": "清空"
+    },
+    {
+      "name": "error_log_clear_title",
+      "value": "清空错误日志？"
+    },
+    {
+      "name": "error_log_clear_message",
+      "value": "将永久删除本机保存的全部错误日志。"
     },
     {
       "name": "settings_diagnostics_hint",

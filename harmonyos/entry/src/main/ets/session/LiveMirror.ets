@@ -6,6 +6,7 @@
 import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import adbCore from 'libadb_core.so';
+import { AppErrorLog } from '../common/AppErrorLog';
 import { Device } from '../model/Device';
 
 const DOMAIN: number = 0x0001;
@@ -216,6 +217,7 @@ export function attachLiveDecoder(): LiveStatus {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     hilog.error(DOMAIN, TAG, 'attachDecoder failed %{public}s', msg);
+    AppErrorLog.e('decoder', msg);
     return pollLiveStatus();
   }
 }
@@ -391,6 +393,7 @@ export async function captureRemoteScreenshot(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     hilog.error(DOMAIN, TAG, 'screencap failed %{public}s', msg);
+    AppErrorLog.e('screencap', msg);
     return { ok: false, png: null, detail: msg };
   }
 }
@@ -531,6 +534,7 @@ export async function pullRemoteFile(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     hilog.error(DOMAIN, TAG, 'sync pull failed %{public}s', msg);
+    AppErrorLog.e('sync-pull', msg);
     return {
       ok: false,
       data: null,

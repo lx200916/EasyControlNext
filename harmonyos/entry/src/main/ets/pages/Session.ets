@@ -16,6 +16,8 @@ import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { AppErrorLog } from '../common/AppErrorLog';
+import { AppSettings } from '../common/AppSettings';
 import { FoldPosture } from '../common/Breakpoint';
 import { Device } from '../model/Device';
 import { DeviceStore } from '../model/DeviceStore';
@@ -366,6 +368,7 @@ export struct Session {
     if (st.audioDetail.indexOf('unavailable') >= 0 && this.audioRelayOn && !this.audioFailToasted) {
       this.audioFailToasted = true;
       this.toast('音频硬件解码不可用，暂无声音');
+      AppErrorLog.w('audio', '硬件解码不可用');
       hilog.warn(
         SESSION_LOG_DOMAIN,
         SESSION_LOG_TAG,
@@ -668,6 +671,7 @@ export struct Session {
             return;
           }
           hilog.error(SESSION_LOG_DOMAIN, SESSION_LOG_TAG, 'LIVE_FAIL %{public}s', live.detail);
+          AppErrorLog.e('live', live.detail);
           this.clearPollTimer();
           this.toast(this.liveFailToast(live.detail));
           void this.runFixtureInject();
@@ -766,6 +770,7 @@ export struct Session {
       const msg = e instanceof Error ? e.message : String(e);
       this.statusLine = msg;
       hilog.error(SESSION_LOG_DOMAIN, SESSION_LOG_TAG, 'inject exception %{public}s', msg);
+      AppErrorLog.e('fixture', msg);
     }
   }
 
@@ -789,6 +794,7 @@ export struct Session {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       hilog.error(SESSION_LOG_DOMAIN, SESSION_LOG_TAG, 'live start failed %{public}s', msg);
+      AppErrorLog.e('live', msg);
       this.toast(this.liveFailToast(msg));
       stopLiveMirror();
       await this.runFixtureInject();
@@ -1252,6 +1258,7 @@ export struct Session {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       hilog.error(SESSION_LOG_DOMAIN, SESSION_LOG_TAG, 'pull failed %{public}s', msg);
+      AppErrorLog.e('file-pull', msg);
       this.toast('拉取失败');
     } finally {
       this.pulling = false;
@@ -2521,7 +2528,12 @@ export struct Session {
         this.showAppPicker = false;
         return true;
       }
-      this.sendKey(KEYCODE_BACK);
+      // Setting: system Back → remote KEYCODE_BACK, or exit Session locally.
+      if (AppSettings.isSessionBackToRemote()) {
+        this.sendKey(KEYCODE_BACK);
+        return true;
+      }
+      this.closeSession();
       return true;
     })
   }

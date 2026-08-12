@@ -24,6 +24,9 @@ import { DeviceEditor } from '../pages/DeviceEditor';
 import { Presets } from '../pages/Presets';
 import { Settings } from '../pages/Settings';
 import { Session } from '../pages/Session';
+import { ErrorLog } from '../pages/ErrorLog';
+import { AppErrorLog } from '../common/AppErrorLog';
+import { AppSettings } from '../common/AppSettings';
 
 function routeParamAsString(param: Object): string {
   if (param === undefined || param === null) {
@@ -38,6 +41,8 @@ function AppNavDestination(name: string, param: Object) {
     Settings()
   } else if (name === 'presets') {
     Presets()
+  } else if (name === 'error_logs') {
+    ErrorLog()
   } else if (name === 'device') {
     DeviceEditor({ uuid: routeParamAsString(param) })
   } else if (name === 'session') {
@@ -64,6 +69,8 @@ export struct AppShell {
 
   aboutToAppear(): void {
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    AppErrorLog.init(ctx);
+    void AppSettings.init(ctx);
     void DeviceStore.init(ctx);
     startLayoutWatch((snapshot: LayoutSnapshot) => {
       this.preferSplit = snapshot.preferSplit;

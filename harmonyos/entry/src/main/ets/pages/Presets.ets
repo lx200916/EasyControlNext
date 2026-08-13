@@ -3,17 +3,20 @@
  * Apply-to-device lives on DeviceEditor; Manage → Apply preset is session-only.
  */
 
+import { HdsNavDestination } from '@kit.UIDesignKit';
+import { hdsOverlayTitleBar, HDS_MINI_TITLE_INSET_VP } from '../common/HdsTitleBar';
 import { PresetListPanel } from '../components/PresetListPanel';
 
 @Component
 export struct Presets {
   @Consume('pathStack') pathStack: NavPathStack;
   @Consume('safeBottomVp') safeBottomVp: number;
+  private readonly pageScroller: Scroller = new Scroller();
 
   build() {
-    NavDestination() {
+    HdsNavDestination() {
       Column() {
-        Scroll() {
+        Scroll(this.pageScroller) {
           Column() {
             PresetListPanel()
           }
@@ -25,19 +28,25 @@ export struct Presets {
             bottom: 24 + this.safeBottomVp,
           })
         }
+        .clip(false)
+        .edgeEffect(EdgeEffect.Spring)
         .layoutWeight(1)
         .align(Alignment.TopStart)
+        .contentStartOffset(HDS_MINI_TITLE_INSET_VP)
       }
       .width('100%')
       .height('100%')
       .backgroundColor($r('app.color.page_background'))
     }
-    .title({
-      main: $r('app.string.presets_title'),
-      sub: $r('app.string.presets_subtitle'),
-    })
+    .titleBar(hdsOverlayTitleBar({
+      title: {
+        mainTitle: $r('app.string.presets_title'),
+        subTitle: $r('app.string.presets_subtitle'),
+      },
+    }))
     .hideTitleBar(false)
-    .backgroundColor($r('app.color.page_background'))
+    .bindToScrollable([this.pageScroller])
+    .backgroundColor(Color.Transparent)
     .onBackPressed(() => {
       this.pathStack.pop();
       return true;

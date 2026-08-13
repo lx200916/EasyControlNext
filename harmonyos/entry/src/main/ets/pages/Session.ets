@@ -18,6 +18,7 @@ import { pasteboard } from '@kit.BasicServicesKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import { HdsNavDestination } from '@kit.UIDesignKit';
 import { AppErrorLog } from '../common/AppErrorLog';
 import { AppSettings } from '../common/AppSettings';
 import { FoldPosture } from '../common/Breakpoint';
@@ -2498,7 +2499,7 @@ export struct Session {
   }
 
   build() {
-    NavDestination() {
+    HdsNavDestination() {
       Stack() {
         // Stable video host — never inside fold if/else (avoids XComponent destroy → Gate D).
         Column() {

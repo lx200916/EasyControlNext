@@ -5,6 +5,8 @@
 
 import { pasteboard } from '@kit.BasicServicesKit';
 import { SymbolGlyphModifier } from '@kit.ArkUI';
+import { HdsNavDestination } from '@kit.UIDesignKit';
+import { hdsOverlayTitleBar, HDS_MINI_TITLE_INSET_VP } from '../common/HdsTitleBar';
 import {
   AppErrorLog,
   ErrorLogEntry,
@@ -23,6 +25,7 @@ export struct ErrorLog {
   @State private query: string = '';
   @State private levelFilter: LevelFilter = 'all';
   @State private expandedIndex: number = -1;
+  private readonly pageScroller: Scroller = new Scroller();
 
   aboutToAppear(): void {
     this.reload();
@@ -190,7 +193,7 @@ export struct ErrorLog {
   }
 
   build() {
-    NavDestination() {
+    HdsNavDestination() {
       Column() {
         TextInput({
           text: this.query,
@@ -224,7 +227,7 @@ export struct ErrorLog {
             .padding({ top: 48 })
             .layoutWeight(1)
         } else {
-          List({ space: 8 }) {
+          List({ space: 8, scroller: this.pageScroller }) {
             ForEach(this.filtered, (entry: ErrorLogEntry, index: number) => {
               ListItem() {
                 this.entryRow(entry, index)
@@ -241,38 +244,55 @@ export struct ErrorLog {
             bottom: 16 + this.safeBottomVp,
           })
           .scrollBar(BarState.Off)
+          .clip(false)
+          .edgeEffect(EdgeEffect.Spring)
         }
       }
       .width('100%')
       .height('100%')
+      .padding({ top: HDS_MINI_TITLE_INSET_VP })
       .backgroundColor($r('app.color.page_background'))
     }
-    .title($r('app.string.error_log_title'))
+    .titleBar(hdsOverlayTitleBar({
+      title: { mainTitle: $r('app.string.error_log_title') },
+      menu: {
+        value: [
+          {
+            content: {
+              label: '刷新',
+              icon: new SymbolGlyphModifier($r('sys.symbol.arrow_clockwise')),
+              isEnabled: true,
+              action: () => {
+                this.reload();
+              },
+            },
+          },
+          {
+            content: {
+              label: '复制',
+              icon: new SymbolGlyphModifier($r('sys.symbol.doc')),
+              isEnabled: true,
+              action: () => {
+                void this.copyAll();
+              },
+            },
+          },
+          {
+            content: {
+              label: '清空',
+              icon: new SymbolGlyphModifier($r('sys.symbol.trash')),
+              isEnabled: true,
+              action: () => {
+                this.confirmClear();
+              },
+            },
+          },
+        ],
+      },
+    }))
     .hideTitleBar(false)
-    .menus([
-      {
-        value: '刷新',
-        symbolIcon: new SymbolGlyphModifier($r('sys.symbol.arrow_clockwise')),
-        action: () => {
-          this.reload();
-        },
-      },
-      {
-        value: '复制',
-        symbolIcon: new SymbolGlyphModifier($r('sys.symbol.doc')),
-        action: () => {
-          void this.copyAll();
-        },
-      },
-      {
-        value: '清空',
-        symbolIcon: new SymbolGlyphModifier($r('sys.symbol.trash')),
-        action: () => {
-          this.confirmClear();
-        },
-      },
-    ])
-    .backgroundColor($r('app.color.page_background'))
+    .bindToScrollable([this.pageScroller])
+    .backgroundColor(Color.Transparent)
     .onBackPressed(() => {
       this.pathStack.pop();
       return true;

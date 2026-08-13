@@ -4,6 +4,8 @@
  * Home 设置 tab embeds this with embedded=true (no NavDestination / back chrome).
  */
 
+import { HdsNavDestination } from '@kit.UIDesignKit';
+import { hdsOverlayTitleBar, HDS_MINI_TITLE_INSET_VP } from '../common/HdsTitleBar';
 import { GateBDebugStrip } from '../components/GateBDebugStrip';
 import { DecodeCapsStrip } from '../components/DecodeCapsStrip';
 import { PresetListPanel } from '../components/PresetListPanel';
@@ -36,6 +38,7 @@ export struct Settings {
   @State private probeTimeoutMs: number = CONNECT_PROBE_TIMEOUT_DEFAULT_MS;
   @State private probeTimeoutIndex: number = 1;
   private readonly probeTimeoutLabels: string[] = ['300 ms', '500 ms（默认）', '800 ms', '1.5 s', '3 s'];
+  private readonly pageScroller: Scroller = new Scroller();
 
   aboutToAppear(): void {
     this.sessionBackToRemote = AppSettings.isSessionBackToRemote();
@@ -370,7 +373,7 @@ export struct Settings {
 
   @Builder
   private stackedCompact() {
-    Scroll() {
+    Scroll(this.pageScroller) {
       Column({ space: 16 }) {
         Text($r('app.string.settings_cat_about'))
           .fontSize(13)
@@ -404,9 +407,11 @@ export struct Settings {
         bottom: 16,
       })
     }
+    .clip(false)
     .width('100%')
     .layoutWeight(1)
     .align(Alignment.TopStart)
+    .contentStartOffset(HDS_MINI_TITLE_INSET_VP)
     .contentEndOffset(this.scrollEndClearance())
   }
 
@@ -473,7 +478,7 @@ export struct Settings {
           .borderRadius($r('app.float.radius_detail_panel'))
           .padding(8)
 
-          Scroll() {
+          Scroll(this.pageScroller) {
             Column({ space: 8 }) {
               this.categoryHeading()
               this.contentForCategory()
@@ -481,9 +486,11 @@ export struct Settings {
             .width('100%')
             .padding(16)
           }
+          .clip(false)
           .layoutWeight(1)
           .height('100%')
           .align(Alignment.TopStart)
+          .contentStartOffset(0)
           .contentEndOffset(this.scrollEndClearance())
         }
         .width('100%')
@@ -491,7 +498,7 @@ export struct Settings {
         .padding({
           left: $r('app.float.space_page_h'),
           right: $r('app.float.space_page_h'),
-          top: 8,
+          top: HDS_MINI_TITLE_INSET_VP,
           bottom: 8,
         })
       } else {
@@ -517,18 +524,15 @@ export struct Settings {
         backgroundColor: $r('app.color.surface_card'),
       })
     } else {
-      NavDestination() {
+      HdsNavDestination() {
         this.settingsBody()
       }
-      .title($r('app.string.settings_title'))
+      .titleBar(hdsOverlayTitleBar({
+        title: { mainTitle: $r('app.string.settings_title') },
+      }))
       .hideTitleBar(false)
-      .backgroundColor($r('app.color.page_background'))
-      .bindSheet($$this.showLanguageSheet, this.languageSheetBuilder(), {
-        height: SheetSize.FIT_CONTENT,
-        dragBar: true,
-        showClose: true,
-        backgroundColor: $r('app.color.surface_card'),
-      })
+      .bindToScrollable([this.pageScroller])
+      .backgroundColor(Color.Transparent)
       .bindSheet($$this.showLanguageSheet, this.languageSheetBuilder(), {
         height: SheetSize.FIT_CONTENT,
         dragBar: true,

@@ -4,6 +4,8 @@
 
 import { common } from '@kit.AbilityKit';
 import { SymbolGlyphModifier } from '@kit.ArkUI';
+import { HdsNavDestination } from '@kit.UIDesignKit';
+import { hdsOverlayTitleBar, HDS_MINI_TITLE_INSET_VP } from '../common/HdsTitleBar';
 import { CameraFacing, HevcPref, VideoSource } from '../model/Device';
 import { ConnectionPreset, normalizeHevcProfile } from '../model/ConnectionPreset';
 import { PresetStore } from '../model/PresetStore';
@@ -47,6 +49,7 @@ export struct PresetEditor {
   private editId: string = '';
   private hevcProfile: HevcPref = 'main';
   private loaded: boolean = false;
+  private readonly pageScroller: Scroller = new Scroller();
 
   aboutToAppear(): void {
     this.isNew = this.presetId === 'new' || this.presetId.length === 0;
@@ -491,9 +494,9 @@ export struct PresetEditor {
   }
 
   build() {
-    NavDestination() {
+    HdsNavDestination() {
       Column() {
-        Scroll() {
+        Scroll(this.pageScroller) {
           Column({ space: 16 }) {
             Column({ space: 10 }) {
               this.fieldLabel($r('app.string.preset_name'))
@@ -546,25 +549,36 @@ export struct PresetEditor {
             bottom: 24 + this.safeBottomVp,
           })
         }
+        .clip(false)
+        .edgeEffect(EdgeEffect.Spring)
         .layoutWeight(1)
         .align(Alignment.TopStart)
+        .contentStartOffset(HDS_MINI_TITLE_INSET_VP)
       }
       .width('100%')
       .height('100%')
       .backgroundColor($r('app.color.page_background'))
     }
-    .title(this.editorTitle())
-    .hideTitleBar(false)
-    .menus([
-      {
-        value: '保存',
-        symbolIcon: new SymbolGlyphModifier($r('sys.symbol.checkmark')),
-        action: () => {
-          this.onSave();
-        },
+    .titleBar(hdsOverlayTitleBar({
+      title: { mainTitle: this.editorTitle() },
+      menu: {
+        value: [
+          {
+            content: {
+              label: '保存',
+              icon: new SymbolGlyphModifier($r('sys.symbol.checkmark')),
+              isEnabled: true,
+              action: () => {
+                this.onSave();
+              },
+            },
+          },
+        ],
       },
-    ])
-    .backgroundColor($r('app.color.page_background'))
+    }))
+    .hideTitleBar(false)
+    .bindToScrollable([this.pageScroller])
+    .backgroundColor(Color.Transparent)
     .onBackPressed(() => {
       this.pathStack.pop();
       return true;

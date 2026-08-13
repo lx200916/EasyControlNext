@@ -2,13 +2,13 @@
  * Foldable-first Home with HDS immersive TabBar: 设备 | 设置.
  * Official glass: HdsTabs.barFloatingStyle + systemMaterialEffect (UI Design Kit
  * floating sample / 沉浸光感). preferSplit: list|detail inside 设备; 设置 embeds Settings.
- * 新增 is a header "+" action (push DeviceEditor create) — not a tab.
+ * 新增 is HdsNavigation title-bar "+" (push DeviceEditor create) — not a tab.
  * Manage sheet aligns with Android EasyControlApp ManageDeviceSheet.
  * Gate B stays in Settings → Diagnostics (not primary chrome).
  */
 
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
-import { hdsMaterial, HdsTabs, HdsTabsController } from '@kit.UIDesignKit';
+import { HdsTabs, HdsTabsController } from '@kit.UIDesignKit';
 import { DeviceCard } from '../components/DeviceCard';
 import { CURRENT_COLOR_MODE_KEY, isDarkColorMode } from '../common/SystemInsets';
 import { ColdStartTrace } from '../common/ColdStartTrace';
@@ -36,6 +36,7 @@ import {
   probeTcpReachableLazy,
 } from '../session/LiveMirrorLazy';
 import { PENDING_FORM_NAV_KEY } from '../common/FormNav';
+import { HOME_LIST_SCROLLER, HDS_MINI_TITLE_INSET_VP, hdsAdaptiveMaterial } from '../common/HdsTitleBar';
 import { SessionLaunchOpts, stageSessionLaunch } from '../session/SessionLaunch';
 
 const TAB_DEVICES: number = 0;
@@ -53,8 +54,6 @@ const TAB_BAR_OFFICIAL_BOTTOM_MARGIN_VP: number = 28;
 const TAB_BAR_SAFE_AIR_VP: number = 12;
 /** Extra gap above the floating pill when scrolling last rows into view. */
 const TAB_BAR_SCROLL_GAP_VP: number = 8;
-/** Header action slot — keep Devices/Settings header height identical. */
-const HEADER_ACTION_SLOT_VP: number = 40;
 /**
  * Tighter floating pill for 2 tabs (official sample 200/300/400 is too wide).
  * Phone ≈ 168; tablet / preferSplit modestly larger.
@@ -871,46 +870,6 @@ export struct Home {
   }
 
   @Builder
-  private headerBar() {
-    Row() {
-      Text($r('app.string.app_title'))
-        .fontSize(this.preferSplit ? 22 : 24)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.ink'))
-        .layoutWeight(1)
-
-      // Fixed-size action slot — hiding "+" on Settings used to shrink the header and
-      // vertically jump the overlapping HdsTabs pill.
-      if (this.currentTab === TAB_DEVICES) {
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.plus'))
-            .fontSize(20)
-            .fontColor([$r('app.color.ink')])
-        }
-        .width(HEADER_ACTION_SLOT_VP)
-        .height(HEADER_ACTION_SLOT_VP)
-        .backgroundColor($r('app.color.surface_card'))
-        .accessibilityText($r('app.string.action_add_device'))
-        .onClick(() => {
-          this.openAddDevice();
-        })
-      } else {
-        Blank()
-          .width(HEADER_ACTION_SLOT_VP)
-          .height(HEADER_ACTION_SLOT_VP)
-      }
-    }
-    .width('100%')
-    .alignItems(VerticalAlign.Center)
-    .padding({
-      left: $r('app.float.space_page_h'),
-      right: $r('app.float.space_page_h'),
-      top: 10,
-      bottom: 4,
-    })
-  }
-
-  @Builder
   private tabBarItem(index: number, title: Resource, icon: Resource) {
     Column({ space: 2 }) {
       SymbolGlyph(icon)
@@ -974,7 +933,7 @@ export struct Home {
     } else if (this.devices.length === 0) {
       this.emptyList();
     } else {
-      List({ space: this.preferSplit ? 8 : 12 }) {
+      List({ space: this.preferSplit ? 8 : 12, scroller: HOME_LIST_SCROLLER }) {
         ForEach(this.devices, (device: Device) => {
           ListItem() {
             DeviceCard({
@@ -1000,10 +959,12 @@ export struct Home {
         left: this.preferSplit ? 12 : $r('app.float.space_page_h'),
         right: this.preferSplit ? 4 : $r('app.float.space_page_h'),
       })
+      .contentStartOffset(this.preferSplit ? 0 : HDS_MINI_TITLE_INSET_VP)
       // Paint under floating glass bar; clearance is scroll-only (design: non-pill area clickable).
       .contentEndOffset(this.floatingTabScrollClearance())
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
+      .clip(false)
     }
   }
 
@@ -1299,7 +1260,7 @@ export struct Home {
         }
         .width('100%')
         .layoutWeight(1)
-        .padding({ left: 8, top: 4 })
+        .padding({ left: 8, top: HDS_MINI_TITLE_INSET_VP })
         .backgroundColor(Color.Transparent)
       } else {
         Column() {
@@ -1331,10 +1292,9 @@ export struct Home {
 
   build() {
     Column() {
-      this.headerBar()
-
       // Official floating + 沉浸光感 / 液态玻璃 (UI Design Kit HdsTabs).
       // Sample: ui-design-hds-tabs-bar-floating — barFloatingStyle + systemMaterialEffect.
+      // Title bar glass lives on AppShell HdsNavigation (content stacks underneath).
       // Do not hand-roll barBackgroundBlurStyle / barBackgroundEffect.
       HdsTabs({
         barPosition: BarPosition.End,
@@ -1371,10 +1331,7 @@ export struct Home {
           maskHeight: 92,
         },
         // Official immersive material (液态玻璃 / 沉浸光感) on supported devices.
-        systemMaterialEffect: {
-          materialType: hdsMaterial.MaterialType.IMMERSIVE,
-          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
-        },
+        systemMaterialEffect: hdsAdaptiveMaterial(),
       })
       .scrollable(false)
       .animationDuration(0)

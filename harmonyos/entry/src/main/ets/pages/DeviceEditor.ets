@@ -5,6 +5,8 @@
 
 import { common } from '@kit.AbilityKit';
 import { ComponentContent } from '@kit.ArkUI';
+import { HdsNavDestination } from '@kit.UIDesignKit';
+import { hdsOverlayTitleBar, HDS_MINI_TITLE_INSET_VP } from '../common/HdsTitleBar';
 import { image } from '@kit.ImageKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import {
@@ -165,6 +167,7 @@ export struct DeviceEditor {
   private qrPayload: string = '';
   private qrPixelMap: image.PixelMap | undefined = undefined;
   private qrDialogNode: ComponentContent<QrPairDialogParams> | undefined = undefined;
+  private readonly formScroller: Scroller = new Scroller();
   @State private connectOnStart: boolean = false;
   @State private changeToFullOnConnect: boolean = false;
   @State private wakeOnConnect: boolean = true;
@@ -1578,7 +1581,7 @@ export struct DeviceEditor {
   @Builder
   private editorBody() {
     Column() {
-      // Non-embedded: NavDestination system title + back (HarmonyOS standard).
+      // Non-embedded: HdsNavDestination title overlays; form scrolls under it.
 
       if (this.preferSplit && !this.embedded) {
         Row({ space: 12 }) {
@@ -1592,15 +1595,18 @@ export struct DeviceEditor {
           .padding(8)
 
           Column() {
-            Scroll() {
+            Scroll(this.formScroller) {
               Column() {
                 this.formBody()
               }
               .width('100%')
               .padding(20)
             }
+            .clip(false)
+            .edgeEffect(EdgeEffect.Spring)
             .layoutWeight(1)
             .align(Alignment.TopStart)
+            .contentStartOffset(0)
 
             this.bottomBar()
           }
@@ -1614,37 +1620,43 @@ export struct DeviceEditor {
         .padding({
           left: $r('app.float.space_page_h'),
           right: $r('app.float.space_page_h'),
-          top: 8,
+          top: this.embedded ? 8 : HDS_MINI_TITLE_INSET_VP,
           bottom: 8,
         })
       } else {
-        Row({ space: 8 }) {
-          this.compactSectionChip(SECTION_BASIC, '基本')
-          this.compactSectionChip(SECTION_PAIRING, '配对')
-          this.compactSectionChip(SECTION_VIDEO, '视频')
-        }
-        .width('100%')
-        .padding({
-          left: $r('app.float.space_page_h'),
-          right: $r('app.float.space_page_h'),
-          top: 4,
-          bottom: 4,
-        })
-
-        Scroll() {
+        Scroll(this.formScroller) {
           Column() {
-            this.formBody()
+            Row({ space: 8 }) {
+              this.compactSectionChip(SECTION_BASIC, '基本')
+              this.compactSectionChip(SECTION_PAIRING, '配对')
+              this.compactSectionChip(SECTION_VIDEO, '视频')
+            }
+            .width('100%')
+            .padding({
+              left: $r('app.float.space_page_h'),
+              right: $r('app.float.space_page_h'),
+              top: 4,
+              bottom: 4,
+            })
+
+            Column() {
+              this.formBody()
+            }
+            .width('100%')
+            .padding({
+              left: $r('app.float.space_page_h'),
+              right: $r('app.float.space_page_h'),
+              top: 12,
+              bottom: 24,
+            })
           }
           .width('100%')
-          .padding({
-            left: $r('app.float.space_page_h'),
-            right: $r('app.float.space_page_h'),
-            top: 12,
-            bottom: 24,
-          })
         }
+        .clip(false)
+        .edgeEffect(EdgeEffect.Spring)
         .layoutWeight(1)
         .align(Alignment.TopStart)
+        .contentStartOffset(this.embedded ? 0 : HDS_MINI_TITLE_INSET_VP)
 
         this.bottomBar()
       }
@@ -1668,12 +1680,15 @@ export struct DeviceEditor {
         backgroundColor: $r('app.color.surface_card'),
       })
     } else {
-      NavDestination() {
+      HdsNavDestination() {
         this.editorBody()
       }
-      .title(this.editorPageTitle())
+      .titleBar(hdsOverlayTitleBar({
+        title: { mainTitle: this.editorPageTitle() },
+      }))
       .hideTitleBar(false)
-      .backgroundColor($r('app.color.page_background'))
+      .bindToScrollable([this.formScroller])
+      .backgroundColor(Color.Transparent)
       .bindSheet($$this.showPresetPicker, this.presetPickerBuilder(), {
         height: SheetSize.FIT_CONTENT,
         dragBar: true,

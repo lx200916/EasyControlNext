@@ -1,12 +1,14 @@
 /**
- * Product shell: Navigation + NavPathStack.
- * Home owns 设备 | 设置 Tabs (liquid glass); add device is header "+" → DeviceEditor.
+ * Product shell: HdsNavigation + NavPathStack.
+ * Home owns 设备 | 设置 Tabs (liquid glass); add device is title-bar "+" → DeviceEditor.
+ * Title bar uses HDS 沉浸光感 (systemMaterialEffect). Destinations are HdsNavDestination.
  * Owns immersive safe-area insets for Home / Settings / DeviceEditor.
  * Gate B probe lives under Settings → Diagnostics.
  */
 
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
-import { window } from '@kit.ArkUI';
+import { SymbolGlyphModifier, window } from '@kit.ArkUI';
+import { HdsNavigation, HdsNavigationTitleMode } from '@kit.UIDesignKit';
 import {
   FoldMeta,
   FoldPosture,
@@ -36,6 +38,7 @@ import lazy { ErrorLog } from '../pages/ErrorLog';
 import { AppErrorLog } from '../common/AppErrorLog';
 import { AppSettings } from '../common/AppSettings';
 import { ColdStartTrace } from '../common/ColdStartTrace';
+import { HOME_LIST_SCROLLER, hdsOverlayTitleBar } from '../common/HdsTitleBar';
 import {
   formNavSessionUuid,
   isFormNavSession,
@@ -98,6 +101,8 @@ export struct AppShell {
   private windowSizeListener: ((size: WindowSizePx) => void) | undefined = undefined;
   private windowStatusListener: ((status: window.WindowStatusType) => void) | undefined = undefined;
   private firstBuildMarked: boolean = false;
+  private readonly addDeviceIcon: SymbolGlyphModifier =
+    new SymbolGlyphModifier($r('sys.symbol.plus'));
 
   aboutToAppear(): void {
     ColdStartTrace.mark('AppShell.aboutToAppear.enter');
@@ -253,13 +258,33 @@ export struct AppShell {
   }
 
   build() {
-    Navigation(this.pathStack) {
+    HdsNavigation(this.pathStack) {
       Home()
     }
     .mode(NavigationMode.Stack)
-    .hideTitleBar(true)
+    .hideBackButton(true)
+    .hideToolBar(true)
+    .titleMode(HdsNavigationTitleMode.MINI)
+    .titleBar(hdsOverlayTitleBar({
+      title: { mainTitle: $r('app.string.app_title') },
+      menu: {
+        value: [
+          {
+            content: {
+              label: $r('app.string.action_add_device'),
+              icon: this.addDeviceIcon,
+              isEnabled: true,
+              action: () => {
+                this.pathStack.pushPath({ name: 'device', param: 'new' });
+              },
+            },
+          },
+        ],
+      },
+    }))
+    .bindToScrollable([HOME_LIST_SCROLLER])
     .navDestination(AppNavDestination)
-    .backgroundColor($r('app.color.page_background'))
+    .backgroundColor(Color.Transparent)
     .width('100%')
     .height('100%')
   }

@@ -1,5 +1,5 @@
 /**
- * On-device Gate D live mirror: load jar+RSA from rawfile, start native live session.
+ * On-device Gate D live mirror: jar from rawfile, ADB RSA from HUKS-wrapped filesDir.
  * Assets are cached after first load so Connect does not re-read rawfiles / re-copy buffers.
  */
 
@@ -8,6 +8,13 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import adbCore from 'libadb_core.so';
 import { AppErrorLog } from '../common/AppErrorLog';
 import { Device } from '../model/Device';
+import { loadAdbKeyMaterial } from './AdbKeyAssets';
+import { assertAdbTcpReachable } from './AdbProbeHost';
+import {
+  AdbOpResult,
+  InstalledAppRow,
+  RemoteSystemProps,
+} from './RemoteDeviceTypes';
 
 const DOMAIN: number = 0x0001;
 const TAG: string = 'LiveMirror';
@@ -61,14 +68,6 @@ let cachedAssets: CachedLiveAssets | null = null;
 let lastLoggedPhase: string = '';
 let connectT0Ms: number = 0;
 
-function utf8FromRaw(raw: Uint8Array): string {
-  let out = '';
-  for (let i = 0; i < raw.length; i++) {
-    out += String.fromCharCode(raw[i]);
-  }
-  return out;
-}
-
 async function loadRawCopy(ctx: common.UIAbilityContext, name: string): Promise<ArrayBuffer> {
   const raw = await ctx.resourceManager.getRawFileContent(name);
   const copy = new ArrayBuffer(raw.byteLength);
@@ -89,23 +88,16 @@ async function loadLiveAssets(ctx: common.UIAbilityContext): Promise<CachedLiveA
     return cachedAssets;
   }
   const jar = await loadRawCopy(ctx, 'easycontrolnext_server.jar');
-  const pemRaw = await ctx.resourceManager.getRawFileContent('adb_rsa_key.pem');
-  const pem = utf8FromRaw(pemRaw);
-  let pubLine: ArrayBuffer | undefined = undefined;
-  try {
-    pubLine = await loadRawCopy(ctx, 'adb_rsa_key.pub');
-  } catch (_e) {
-    pubLine = undefined;
-  }
+  const keys = await loadAdbKeyMaterial(ctx);
   const assets: CachedLiveAssets = {
     jarBytes: jar,
-    privateKeyPem: pem,
+    privateKeyPem: keys.privateKeyPem,
   };
-  if (pubLine !== undefined) {
-    assets.publicKeyLine = pubLine;
+  if (keys.publicKeyLine !== undefined) {
+    assets.publicKeyLine = keys.publicKeyLine;
   }
   cachedAssets = assets;
-  hilog.info(DOMAIN, TAG, 'assets cached jar=%{public}d', jar.byteLength);
+  hilog.info(DOMAIN, TAG, 'assets cached jar=%{public}d huks=1', jar.byteLength);
   return assets;
 }
 
@@ -142,6 +134,8 @@ export async function startLiveMirror(
     device.virtualHeight,
     device.virtualDpi
   );
+
+  await assertAdbTcpReachable(device.address, device.adbPort);
 
   const assets = await loadLiveAssets(ctx);
 
@@ -275,16 +269,6 @@ export function stopLiveMirror(): void {
 export interface ScreencapResult {
   ok: boolean;
   png: ArrayBuffer | null;
-  detail: string;
-}
-
-export interface InstalledAppRow {
-  packageName: string;
-  label: string;
-}
-
-export interface AdbOpResult {
-  ok: boolean;
   detail: string;
 }
 
@@ -1237,6 +1221,7 @@ export async function listRemoteThirdPartyApps(
   if (device.address.length === 0) {
     return [];
   }
+  await assertAdbTcpReachable(device.address, device.adbPort);
   const opts = await buildAuthOpts(ctx, device);
 
   try {
@@ -1301,14 +1286,6 @@ export async function launchRemoteAppForeground(
     hilog.error(DOMAIN, TAG, 'launch failed %{public}s', msg);
     return { ok: false, detail: msg };
   }
-}
-
-export interface RemoteSystemProps {
-  ok: boolean;
-  model: string;
-  release: string;
-  sdk: string;
-  detail: string;
 }
 
 /**

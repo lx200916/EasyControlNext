@@ -1,8 +1,13 @@
 /**
  * Compact native capability check — Settings → Diagnostics only (not Home chrome).
+ * libadb_core.so loads only when the user taps 检测.
  */
 
-import { GateBProbeResult, runGateBProbe } from '../native/AdbCore';
+import { GateBProbeResult } from '../native/AdbCoreTypes';
+
+interface AdbCoreNs {
+  runGateBProbe: () => GateBProbeResult;
+}
 
 @Component
 export struct GateBDebugStrip {
@@ -11,17 +16,33 @@ export struct GateBDebugStrip {
   @Prop embedded: boolean = false;
   @State private probeLabel: string = '点击检测原生能力';
   @State private probeOk: boolean = false;
+  @State private probeBusy: boolean = false;
 
   aboutToAppear(): void {
     this.probeLabel = '点击检测原生能力';
   }
 
   private refreshProbe(): void {
-    const probe: GateBProbeResult = runGateBProbe();
-    this.probeOk = probe.ok && probe.roundTripOk;
-    this.probeLabel = probe.ok
-      ? `原生库正常 · v${probe.version}`
-      : `检测失败 · ${probe.detail}`;
+    if (this.probeBusy) {
+      return;
+    }
+    this.probeBusy = true;
+    this.probeLabel = '检测中…';
+    void import('../native/AdbCore')
+      .then((ns: AdbCoreNs) => {
+        const probe: GateBProbeResult = ns.runGateBProbe();
+        this.probeOk = probe.ok && probe.roundTripOk;
+        this.probeLabel = probe.ok
+          ? `原生库正常 · v${probe.version}`
+          : `检测失败 · ${probe.detail}`;
+        this.probeBusy = false;
+      })
+      .catch((e: Object) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.probeOk = false;
+        this.probeLabel = `检测失败 · ${msg}`;
+        this.probeBusy = false;
+      });
   }
 
   build() {
@@ -34,22 +55,18 @@ export struct GateBDebugStrip {
           .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-        Button('检测')
-          .type(ButtonType.Normal)
-          .fontSize(13)
-          .height(32)
-          .padding({ left: 14, right: 14 })
-          .backgroundColor($r('app.color.surface_muted'))
-          .fontColor($r('app.color.ink'))
-          .onClick(() => {
-            this.refreshProbe();
-          })
+        Text('检测')
+          .fontSize(14)
+          .fontColor(this.probeBusy ? $r('app.color.text_secondary') : $r('app.color.accent_blue'))
       }
       .width('100%')
       .constraintSize({ minHeight: $r('app.float.debug_strip_height') })
       .padding(this.embedded
         ? { left: 12, right: 12, top: 10, bottom: 10 }
         : { left: $r('app.float.space_page_h'), right: $r('app.float.space_page_h') })
+      .onClick(() => {
+        this.refreshProbe();
+      })
     }
     .width('100%')
     .padding({ bottom: this.embedded ? 0 : this.safeBottomVp })

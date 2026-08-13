@@ -15,6 +15,7 @@ pub mod session;
 pub mod signer;
 pub mod sync_pull;
 pub mod sync_push;
+pub mod tls_client;
 pub mod transport;
 
 pub use dual_connect::{
@@ -41,4 +42,4 @@ pub use sync_pull::{
   validate_remote_path, PullStreamParser, SyncPullResult, MAX_PULL_BYTES,
 };
 pub use sync_push::{build_sync_push, parse_and_hash_push, sha256_hex, SyncPushPlan};
-pub use transport::{connect_tcp, AdbTransport};
+pub use transport::{connect_tcp, AdbTransport, SessionIo};

@@ -4,7 +4,7 @@
  * - full (sm): denser card with 连接 / 管理
  */
 
-import { Device } from '../model/Device';
+import { Device, displayDeviceName, isLazyDeviceName } from '../model/Device';
 import { formatDeviceEndpoint } from '../model/MockDevices';
 
 @Component
@@ -18,7 +18,13 @@ export struct DeviceCard {
   onSelect: (device: Device) => void = (_device: Device) => {};
 
   private displayName(): string {
-    return this.device.name.length > 0 ? this.device.name : '未命名设备';
+    return displayDeviceName(this.device);
+  }
+
+  private nameColor(): ResourceColor {
+    return isLazyDeviceName(this.device.name)
+      ? $r('app.color.text_secondary')
+      : $r('app.color.ink');
   }
 
   build() {
@@ -33,7 +39,7 @@ export struct DeviceCard {
           Text(this.displayName())
             .fontSize(16)
             .fontWeight(this.selected ? FontWeight.Medium : FontWeight.Regular)
-            .fontColor($r('app.color.ink'))
+            .fontColor(this.nameColor())
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .width('100%')
@@ -73,7 +79,7 @@ export struct DeviceCard {
             Text(this.displayName())
               .fontSize(17)
               .fontWeight(FontWeight.Medium)
-              .fontColor($r('app.color.ink'))
+              .fontColor(this.nameColor())
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
               .width('100%')
@@ -95,26 +101,24 @@ export struct DeviceCard {
 
         Row({ space: 8 }) {
           Button($r('app.string.action_manage'))
-            .type(ButtonType.Normal)
+            .type(ButtonType.Capsule)
             .layoutWeight(1)
             .height(40)
             .fontSize(14)
             .backgroundColor($r('app.color.accent_container'))
             .fontColor($r('app.color.accent_blue'))
-            .borderRadius($r('app.float.radius_md'))
             .hitTestBehavior(HitTestMode.Default)
             .onClick(() => {
               this.onManage(this.device);
             })
 
           Button($r('app.string.action_connect'))
-            .type(ButtonType.Normal)
+            .type(ButtonType.Capsule)
             .layoutWeight(1)
             .height(40)
             .fontSize(14)
             .backgroundColor($r('app.color.brand_ink'))
-            .fontColor(Color.White)
-            .borderRadius($r('app.float.radius_md'))
+            .fontColor($r('app.color.on_brand_ink'))
             .hitTestBehavior(HitTestMode.Default)
             .onClick(() => {
               this.onConnect(this.device);

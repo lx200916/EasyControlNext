@@ -1,7 +1,7 @@
 /**
  * Typed device model for the HarmonyOS controller.
  * Field semantics align with Android `entity/Device.java` for protocol/session options.
- * Persisted via `data/DeviceDb.ets` (relationalStore).
+ * Persisted via `data/DevicePrefs.ets` (preferences JSON blob).
  */
 export type VideoSource = 'display' | 'camera';
 export type CameraFacing = 'front' | 'back';
@@ -32,7 +32,7 @@ export class Device {
   connectOnStart: boolean = false;
   /** Prefer fullscreen session chrome on connect (parity flag; Harmony session is fullscreen). */
   changeToFullOnConnect: boolean = false;
-  /** After live main socket is up, send power wake (Android Client.buttonWake). */
+  /** After live main socket is up, send power mode 1 (server injects KEYCODE_WAKEUP). */
   wakeOnConnect: boolean = true;
   /** After connect, turn controlled display backlight off (delayed). */
   lightOffOnConnect: boolean = false;
@@ -43,7 +43,7 @@ export class Device {
   customResolutionWidth: number = 1080;
   customResolutionHeight: number = 2400;
   /** On session close: lock controlled device (power mode 0). */
-  lockOnClose: boolean = true;
+  lockOnClose: boolean = false;
   /** On session close: restore backlight when not locking. */
   lightOnClose: boolean = false;
   videoSource: VideoSource = 'display';
@@ -58,4 +58,16 @@ export class Device {
       this.uuid = uuid;
     }
   }
+}
+
+/** Shown while `name` is empty, until the first successful getprop probe. */
+export const DEVICE_NAME_PENDING: string = '等待探测…';
+
+export function isLazyDeviceName(name: string): boolean {
+  return name.trim().length === 0;
+}
+
+export function displayDeviceName(device: Device): string {
+  const n = device.name.trim();
+  return n.length > 0 ? n : DEVICE_NAME_PENDING;
 }

@@ -21,3 +21,21 @@
 -enable-toplevel-obfuscation
 -enable-filename-obfuscation
 -enable-export-obfuscation
+
+# Worker entry path is a string literal — must not rename the file.
+-keep-file-name
+AdbProbeWorker
+
+# Worker ↔ host message field names (serialized across threads).
+-keep-property-name
+op
+seq
+host
+adbPort
+privateKeyPem
+publicKeyLine
+ok
+model
+release
+sdk
+detail

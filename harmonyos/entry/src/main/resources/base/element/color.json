@@ -2,7 +2,7 @@
   "color": [
     {
       "name": "start_window_background",
-      "value": "#FFFFFF"
+      "value": "#F2F3F5"
     },
     {
       "name": "page_background",
@@ -25,8 +25,16 @@
       "value": "#1A1A1A"
     },
     {
+      "name": "on_brand_ink",
+      "value": "#FFFFFF"
+    },
+    {
       "name": "ink",
       "value": "#171717"
+    },
+    {
+      "name": "on_accent",
+      "value": "#FFFFFF"
     },
     {
       "name": "text_secondary",

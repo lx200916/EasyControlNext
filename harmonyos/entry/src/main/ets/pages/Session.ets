@@ -4,8 +4,9 @@
  * + extras (power, rotate, light, nav, clipboard, notification panel, audio relay,
  *   volume, screenshot, ADB sync pull, quick-launch app, expanded/hover keyboard).
  *
- * Hover (foldPosture === 'half'): upper = letterboxed video; lower = control dock (+ optional
- * QWERTY). Do not use phone bottom bar or wide side rail in half-fold.
+ * Hover (foldPosture === 'half'): horizontal split — left = control dock + QWERTY,
+ * right = letterboxed video. Do not use phone bottom bar, wide side rail, or
+ * top-bottom Column in half-fold.
  * Wide/side rail (preferSplit): narrow single-column chrome by default; opens wider 3-column
  * tool pad + in-rail QWERTY when the on-screen keyboard is shown (≤50% height, width-capped).
  * Portrait expanded extras: Column — tool row on top, optional QWERTY below.
@@ -16,10 +17,16 @@ import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { window } from '@kit.ArkUI';
 import { AppErrorLog } from '../common/AppErrorLog';
 import { AppSettings } from '../common/AppSettings';
 import { FoldPosture } from '../common/Breakpoint';
-import { Device } from '../model/Device';
+import {
+  CURRENT_COLOR_MODE_KEY,
+  enableSessionFullscreen,
+  restoreStandardSystemBars,
+} from '../common/SystemInsets';
+import { Device, displayDeviceName } from '../model/Device';
 import { DeviceStore } from '../model/DeviceStore';
 import { loadDecodeFixture } from '../media/FixtureBitstream';
 import { DecodePipelineStatus, H264DecodeSession } from '../media/H264DecodeSession';
@@ -53,7 +60,6 @@ import {
 import {
   captureRemoteScreenshot,
   expandRemoteNotificationPanel,
-  InstalledAppRow,
   attachLiveDecoder,
   isHevcDecoderUnavailable,
   joinRemotePath,
@@ -72,15 +78,22 @@ import {
   stopLiveMirror,
   writeLiveControl,
 } from '../session/LiveMirror';
+import { InstalledAppRow } from '../session/RemoteDeviceTypes';
 import { consumeSessionLaunch } from '../session/SessionLaunch';
+import { isUnreachableDetail } from '../session/AdbProbeProtocol';
+import { SoftKey } from '../components/SoftKey';
 
 const SESSION_LOG_DOMAIN: number = 0x0001;
 const SESSION_LOG_TAG: string = 'SessionDecode';
 const ICON_SIZE: number = 22;
 const HIT: number = 44;
-/** Hover / laptop dock: shorter landscape toolbar chips, wider hit targets. */
-const HOVER_TOOL_H: number = 52;
-const HOVER_KB_KEY_H: number = 44;
+/**
+ * Hover dock tool chips — shorter than before so QWERTY gets vertical room;
+ * rows are capped at 5 chips (extras split across two rows).
+ */
+const HOVER_TOOL_H: number = 46;
+const HOVER_KB_KEY_H: number = 36;
+const HOVER_KB_GAP: number = 4;
 const CHROME_BG: string = '#E6121214';
 const ICON_TINT: string = '#F2F2F2';
 const ICON_DANGER: string = '#F2B8B5';
@@ -94,7 +107,7 @@ const SIDE_RAIL_NARROW_W: number = 84;
 /** Floor / ceiling for wide side-rail width (vp) when keyboard is open. */
 const SIDE_RAIL_MIN_W: number = 260;
 const SIDE_RAIL_MAX_W: number = 380;
-/** Soft max width for portrait / hover QWERTY so it is not full-bleed on large screens. */
+/** Soft max width for portrait QWERTY so it is not full-bleed on large screens. */
 const KB_PANEL_MAX_W: number = 480;
 /** Compact QWERTY block height estimate (vp) when under half-screen clamp. */
 const EXPANDED_KB_COMPACT_VP: number = 200;
@@ -191,7 +204,7 @@ export struct Session {
     } else {
       this.device = DeviceStore.findByUuid(this.uuid);
     }
-    this.deviceName = this.device !== undefined ? this.device.name : 'Session';
+    this.deviceName = this.device !== undefined ? displayDeviceName(this.device) : 'Session';
     this.showNavBar = this.device !== undefined ? this.device.showNavBarOnConnect : true;
     this.audioRelayOn = this.device !== undefined ? this.device.isAudio : false;
     this.audioFailToasted = false;
@@ -200,6 +213,7 @@ export struct Session {
     this.connectActionsApplied = false;
     this.closeActionsApplied = false;
     this.applyHoverChromeDefaults();
+    this.applySessionSystemBars(true);
     try {
       const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
       void prefetchLiveMirrorAssets(ctx);
@@ -213,7 +227,7 @@ export struct Session {
     this.updateFittedSize();
   }
 
-  /** Half-fold → laptop chrome: show landscape QWERTY dock by default. */
+  /** Half-fold → show QWERTY dock by default on the left keyboard pane. */
   private applyHoverChromeDefaults(): void {
     if (this.foldPosture === 'half') {
       this.showKeyboard = true;
@@ -221,8 +235,8 @@ export struct Session {
       hilog.info(
         SESSION_LOG_DOMAIN,
         SESSION_LOG_TAG,
-        'HOVER_LAYOUT dockSpan=%{public}d widthVp=%{public}d heightVp=%{public}d',
-        Math.floor(this.hoverDockSpanVp()),
+        'HOVER_LAYOUT dockW=%{public}d widthVp=%{public}d heightVp=%{public}d',
+        Math.floor(this.hoverDockWidthVp()),
         Math.floor(this.widthVp),
         Math.floor(this.heightVp)
       );
@@ -241,6 +255,25 @@ export struct Session {
     this.applyCloseActions();
     stopLiveMirror();
     this.decodeSession.release();
+    this.applySessionSystemBars(false);
+  }
+
+  private applySessionSystemBars(enter: boolean): void {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      window.getLastWindow(ctx).then((win: window.Window) => {
+        if (enter) {
+          void enableSessionFullscreen(win);
+        } else {
+          const mode = AppStorage.get<number>(CURRENT_COLOR_MODE_KEY);
+          void restoreStandardSystemBars(win, mode);
+        }
+      }).catch((_e: Error) => {
+        // preview hosts
+      });
+    } catch (_e) {
+      // preview hosts
+    }
   }
 
   private isHover(): boolean {
@@ -248,16 +281,12 @@ export struct Session {
   }
 
   /**
-   * Half-fold windows often still report portrait widthVp. Treat dock as a wide
-   * landscape band using the longer window edge as the effective dock span.
+   * Hover left pane (keyboard + tools). Slightly wider than 50% so QWERTY keys
+   * and toolbar chips are not jammed; right pane stays the remote display.
    */
-  private hoverDockSpanVp(): number {
+  private hoverDockWidthVp(): number {
     const w = this.widthVp > 0 ? this.widthVp : 360;
-    const h = this.heightVp > 0 ? this.heightVp : 780;
-    if (this.isHover()) {
-      return Math.max(w, h * 0.5);
-    }
-    return w;
+    return Math.min(Math.max(Math.floor(w * 0.58), 300), Math.floor(w * 0.62));
   }
 
   private clearPollTimer(): void {
@@ -389,7 +418,7 @@ export struct Session {
   /**
    * Android Client.java on-connect: custom res → wake → restore panel → delayed lightOff.
    * Retries until main TCP accepts control (HEVC→AVC reconnect / early poll races).
-   * Without a successful wake, MIUI often mirrors lock-wallpaper with dead touch.
+   * Server maps power mode 1 to KEYCODE_WAKEUP (no-op if already lit; does not unlock).
    */
   private applyConnectActions(): void {
     if (this.connectActionsApplied || this.device === undefined) {
@@ -492,14 +521,22 @@ export struct Session {
     return Math.min(SIDE_RAIL_MAX_W, Math.max(SIDE_RAIL_MIN_W, Math.floor(w * 0.38)));
   }
 
-  /** Virtual keyboard may occupy at most half the window height. */
+  /** Virtual keyboard height budget — hover left pane leaves room for tool rows. */
   private keyboardMaxHeightVp(): number {
     const h = this.heightVp > 0 ? this.heightVp : 780;
+    if (this.isHover()) {
+      // Tools (~3×46 + gaps + hint) ≈ 200vp; rest is for QWERTY.
+      return Math.max(200, Math.floor(h - 210));
+    }
     return Math.max(160, Math.floor(h * 0.5));
   }
 
-  /** QWERTY panel width — rail content width, or capped centered band on portrait/hover. */
+  /** QWERTY panel width — full hover pane, rail content, or capped portrait band. */
   private keyboardPanelWidthVp(): number {
+    if (this.isHover()) {
+      // Bleed to dock edges (padding is on the dock Column).
+      return Math.max(240, this.hoverDockWidthVp() - 16);
+    }
     if (this.isWideRail()) {
       return Math.max(160, this.sideRailWidthVp() - 16);
     }
@@ -524,6 +561,13 @@ export struct Session {
   }
 
   /** Chrome insets so stable XComponent host sizes correctly without remounting. */
+  private chromeLeftInsetVp(): number {
+    if (this.isHover()) {
+      return this.hoverDockWidthVp();
+    }
+    return 0;
+  }
+
   private chromeRightInsetVp(): number {
     if (!this.isHover() && this.preferSplit) {
       return this.sideRailWidthVp();
@@ -533,8 +577,8 @@ export struct Session {
 
   private chromeBottomInsetVp(): number {
     if (this.isHover()) {
-      const h = this.heightVp > 0 ? this.heightVp : 780;
-      return Math.max(160, Math.floor(h * 0.5));
+      // Horizontal split — keyboard is on the left, not under the video.
+      return 0;
     }
     if (this.preferSplit) {
       // Keyboard (when open) lives inside the side rail — no bottom strip.
@@ -797,6 +841,13 @@ export struct Session {
       AppErrorLog.e('live', msg);
       this.toast(this.liveFailToast(msg));
       stopLiveMirror();
+      if (isUnreachableDetail(msg)) {
+        this.statusLine = msg;
+        this.usingLive = false;
+        this.usingFixture = false;
+        this.maybeOpenPendingAppPicker();
+        return;
+      }
       await this.runFixtureInject();
       this.maybeOpenPendingAppPicker();
     }
@@ -808,7 +859,8 @@ export struct Session {
     if (d.length === 0) {
       return '连接失败，请稍后重试';
     }
-    if (d.indexOf('Android') >= 0 || d.indexOf('相机') >= 0 || d.indexOf('虚拟') >= 0) {
+    if (d.indexOf('Android') >= 0 || d.indexOf('相机') >= 0 || d.indexOf('虚拟') >= 0 ||
+      isUnreachableDetail(d)) {
       return d;
     }
     return `连接失败 · ${d}`;
@@ -1474,7 +1526,7 @@ export struct Session {
     .width(this.isWideRail() ? '100%' : HIT)
     .height(HIT)
     .justifyContent(FlexAlign.Center)
-    .borderRadius(12)
+    .borderRadius(HIT / 2)
     .backgroundColor(accent ? ICON_BTN_ACCENT : ICON_BTN_BG)
     .stateStyles({
       pressed: {
@@ -1495,7 +1547,7 @@ export struct Session {
     .width(this.isWideRail() ? '100%' : HIT)
     .height(HIT)
     .justifyContent(FlexAlign.Center)
-    .borderRadius(12)
+    .borderRadius(HIT / 2)
     .backgroundColor(accent ? ICON_BTN_ACCENT : ICON_BTN_BG)
     .stateStyles({
       pressed: {
@@ -1520,7 +1572,7 @@ export struct Session {
     .width(64)
     .height(64)
     .justifyContent(FlexAlign.Center)
-    .borderRadius(14)
+    .borderRadius(32)
     .backgroundColor(accent ? ICON_BTN_ACCENT : ICON_BTN_BG)
     .onClick(onTap)
   }
@@ -1852,16 +1904,16 @@ export struct Session {
     .backgroundColor(CHROME_BG)
   }
 
-  /** Landscape toolbar chip — spreads LTR across full dock width (not a portrait tile). */
+  /** Hover toolbar chip — equal flex share; no minWidth HIT (that jammed 9-across rows). */
   @Builder
   private hoverToolbarBtn(icon: Resource, label: Resource | string, onTap: () => void, accent: boolean = false) {
-    Column({ space: 2 }) {
+    Column({ space: 1 }) {
       Image(icon)
-        .width(20)
-        .height(20)
+        .width(18)
+        .height(18)
         .objectFit(ImageFit.Contain)
       Text(label)
-        .fontSize(9)
+        .fontSize(8)
         .fontColor('#CCE8EAED')
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -1869,8 +1921,7 @@ export struct Session {
     .layoutWeight(1)
     .height(HOVER_TOOL_H)
     .justifyContent(FlexAlign.Center)
-    .constraintSize({ minWidth: HIT })
-    .borderRadius(10)
+    .borderRadius(HOVER_TOOL_H / 2)
     .backgroundColor(accent ? ICON_BTN_ACCENT : ICON_BTN_BG)
     .onClick(onTap)
   }
@@ -1883,12 +1934,12 @@ export struct Session {
     danger: boolean = false,
     accent: boolean = false
   ) {
-    Column({ space: 2 }) {
+    Column({ space: 1 }) {
       SymbolGlyph(symbol)
-        .fontSize(20)
+        .fontSize(18)
         .fontColor([danger ? ICON_DANGER : ICON_TINT])
       Text(label)
-        .fontSize(9)
+        .fontSize(8)
         .fontColor(danger ? ICON_DANGER : '#CCE8EAED')
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -1896,31 +1947,25 @@ export struct Session {
     .layoutWeight(1)
     .height(HOVER_TOOL_H)
     .justifyContent(FlexAlign.Center)
-    .constraintSize({ minWidth: HIT })
-    .borderRadius(10)
+    .borderRadius(HOVER_TOOL_H / 2)
     .backgroundColor(accent ? ICON_BTN_ACCENT : ICON_BTN_BG)
     .onClick(onTap)
   }
 
   /**
-   * Hover / half-fold dock: wide landscape toolbar rows + optional QWERTY.
-   * Never use phone bottom-bar or wrapped portrait icon pad here.
+   * Hover / half-fold dock: left-pane tools + QWERTY (keyboard | display).
+   * Max 5 chips per row; keyboard fills remaining height.
    */
   @Builder
   private hoverDock() {
-    Column({ space: 6 }) {
-      Text($r('app.string.session_hover_dock_hint'))
-        .fontSize(11)
-        .fontColor('#80E8EAED')
-        .width('100%')
-        .textAlign(TextAlign.Start)
-
+    Column({ space: 8 }) {
       if (this.statusLine.length > 0) {
         Text(this.statusLine)
           .fontSize(10)
           .fontColor('#66E8EAED')
           .width('100%')
-          .textAlign(TextAlign.Start)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
           .gesture(
             LongPressGesture({ duration: 900 })
               .onAction(() => {
@@ -1930,8 +1975,8 @@ export struct Session {
           )
       }
 
-      // Primary nav — single horizontal toolbar band
-      Row({ space: 4 }) {
+      // Primary nav — 5 chips
+      Row({ space: 6 }) {
         this.hoverSymbolToolBtn($r('sys.symbol.chevron_left'), $r('app.string.session_action_back'), () => {
           this.sendKey(KEYCODE_BACK);
         })
@@ -1949,10 +1994,9 @@ export struct Session {
         }, true)
       }
       .width('100%')
-      .justifyContent(FlexAlign.SpaceBetween)
 
-      // Session extras — second LTR toolbar (not a vertical phone rail)
-      Row({ space: 4 }) {
+      // Extras — split into two rows of ≤5 (was one jammed row of 9)
+      Row({ space: 6 }) {
         this.hoverToolbarBtn($r('app.media.ic_nav_power'), $r('app.string.session_action_power'), () => {
           this.sendPower();
         })
@@ -1968,6 +2012,10 @@ export struct Session {
         this.hoverToolbarBtn($r('app.media.ic_nav_clipboard'), $r('app.string.session_action_clipboard'), () => {
           void this.sendClipboardHint();
         })
+      }
+      .width('100%')
+
+      Row({ space: 6 }) {
         this.hoverToolbarBtn($r('app.media.ic_nav_notification'), $r('app.string.session_action_notification'), () => {
           void this.expandNotificationPanel();
         })
@@ -1980,69 +2028,73 @@ export struct Session {
         this.hoverToolbarBtn($r('app.media.ic_nav_vol_down'), $r('app.string.session_action_vol_down'), () => {
           this.sendKey(KEYCODE_VOLUME_DOWN);
         })
+        this.hoverToolbarBtn($r('app.media.ic_nav_shot'), $r('app.string.session_action_screenshot'), () => {
+          void this.takeScreenshot();
+        }, this.capturing)
       }
       .width('100%')
-      .justifyContent(FlexAlign.SpaceBetween)
 
-      // Keep QWERTY above tertiary tools so the landscape band stays visible without scrolling.
+      // QWERTY — takes remaining vertical space; width matches dock.
       if (this.showKeyboard) {
         Column() {
           this.hoverKeyboard()
         }
         .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
         .constraintSize({ maxHeight: this.keyboardMaxHeightVp() })
+      } else {
+        Blank().layoutWeight(1)
       }
 
-      Row({ space: 4 }) {
-        this.hoverToolbarBtn($r('app.media.ic_nav_shot'), $r('app.string.session_action_screenshot'), () => {
-          void this.takeScreenshot();
-        }, this.capturing)
+      Row({ space: 6 }) {
         this.hoverToolbarBtn($r('app.media.ic_nav_file'), $r('app.string.session_action_file_pull'), () => {
           this.openFilePullSheet();
         }, this.pulling)
         this.hoverToolbarBtn($r('app.media.ic_nav_app'), $r('app.string.session_action_launch_app'), () => {
           void this.openAppPicker();
         })
-        Blank().layoutWeight(4)
+        Blank().layoutWeight(3)
       }
       .width('100%')
     }
     .width('100%')
+    .height('100%')
     .padding({
-      left: 12,
-      right: 12,
-      top: 8,
-      bottom: 8 + this.safeBottomVp,
+      left: 8,
+      right: 8,
+      top: 10,
+      bottom: 10 + this.safeBottomVp,
     })
     .backgroundColor(CHROME_BG)
   }
 
   @Builder
   private kbKey(label: string, onTap: () => void, flexW: number = 1, accent: boolean = false) {
-    Text(label)
-      .fontSize(this.isHover() ? 16 : (this.isWideRail() ? 12 : 14))
-      .fontColor(ICON_TINT)
-      .fontWeight(FontWeight.Medium)
-      .textAlign(TextAlign.Center)
-      .height(this.kbKeyHeightVp())
-      .layoutWeight(flexW)
-      .borderRadius(this.isHover() ? 10 : 8)
-      .backgroundColor(accent ? ICON_BTN_ACCENT : '#33FFFFFF')
-      .padding({ top: this.isHover() ? 10 : (this.isWideRail() ? 6 : 8) })
-      .onClick(onTap)
+    SoftKey({
+      label: label,
+      flexW: flexW,
+      accent: accent,
+      keyHeight: this.kbKeyHeightVp(),
+      fontSize: this.isHover() ? 14 : (this.isWideRail() ? 12 : 14),
+      padTop: this.isHover() ? 6 : (this.isWideRail() ? 6 : 8),
+      onPress: onTap,
+    })
   }
 
-  /** QWERTY panel — height ≤50% screen; width capped (rail / centered band, not full-bleed). */
+  /** QWERTY — hover uses full dock width; rail/portrait stay capped. */
   @Builder
   private hoverKeyboard() {
-    Column({ space: this.isWideRail() ? 4 : 5 }) {
-      Text($r('app.string.session_keyboard_cjk_note'))
-        .fontSize(10)
-        .fontColor('#66E8EAED')
-        .width('100%')
-        .textAlign(TextAlign.Start)
-      Row({ space: 3 }) {
+    Column({ space: this.isHover() ? HOVER_KB_GAP : (this.isWideRail() ? 4 : 5) }) {
+      if (!this.isHover()) {
+        Text($r('app.string.session_keyboard_cjk_note'))
+          .fontSize(10)
+          .fontColor('#66E8EAED')
+          .width('100%')
+          .textAlign(TextAlign.Start)
+      }
+      Row({ space: this.isHover() ? HOVER_KB_GAP : 3 }) {
         ForEach(KB_ROW1, (ch: string) => {
           this.kbKey(this.shiftOn ? ch.toUpperCase() : ch, () => {
             this.injectLetter(ch);
@@ -2050,17 +2102,21 @@ export struct Session {
         }, (ch: string) => `r1-${ch}`)
       }
       .width('100%')
-      Row({ space: 3 }) {
-        Blank().width(this.isWideRail() ? 8 : 14)
+      .clip(false)
+      .zIndex(5)
+      Row({ space: this.isHover() ? HOVER_KB_GAP : 3 }) {
+        Blank().width(this.isHover() ? 6 : (this.isWideRail() ? 8 : 14))
         ForEach(KB_ROW2, (ch: string) => {
           this.kbKey(this.shiftOn ? ch.toUpperCase() : ch, () => {
             this.injectLetter(ch);
           })
         }, (ch: string) => `r2-${ch}`)
-        Blank().width(this.isWideRail() ? 8 : 14)
+        Blank().width(this.isHover() ? 6 : (this.isWideRail() ? 8 : 14))
       }
       .width('100%')
-      Row({ space: 3 }) {
+      .clip(false)
+      .zIndex(4)
+      Row({ space: this.isHover() ? HOVER_KB_GAP : 3 }) {
         this.kbKey(this.shiftOn ? '⇧' : 'shift', () => {
           this.shiftOn = !this.shiftOn;
         }, 2, this.shiftOn)
@@ -2074,7 +2130,9 @@ export struct Session {
         }, 2)
       }
       .width('100%')
-      Row({ space: 3 }) {
+      .clip(false)
+      .zIndex(3)
+      Row({ space: this.isHover() ? HOVER_KB_GAP : 3 }) {
         ForEach(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'], (d: string) => {
           this.kbKey(d, () => {
             this.injectDigit(d);
@@ -2082,7 +2140,9 @@ export struct Session {
         }, (d: string) => `d-${d}`)
       }
       .width('100%')
-      Row({ space: 3 }) {
+      .clip(false)
+      .zIndex(2)
+      Row({ space: this.isHover() ? HOVER_KB_GAP : 3 }) {
         this.kbKey('space', () => {
           this.sendKey(KEYCODE_SPACE);
         }, 5)
@@ -2091,10 +2151,13 @@ export struct Session {
         }, 2)
       }
       .width('100%')
+      .clip(false)
+      .zIndex(1)
     }
-    .width(this.keyboardPanelWidthVp())
+    .width(this.isHover() ? '100%' : this.keyboardPanelWidthVp())
     .constraintSize({ maxHeight: this.keyboardMaxHeightVp() })
-    .padding({ top: 4 })
+    .padding({ top: this.isHover() ? 2 : 4 })
+    .clip(false)
   }
 
   @Builder
@@ -2253,8 +2316,8 @@ export struct Session {
         .padding({ left: 16, right: 16, top: 4, bottom: 8 })
 
       Row({ space: 8 }) {
-        Button({ type: ButtonType.Normal }) {
-          SymbolGlyph($r('sys.symbol.chevron_left'))
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.arrow_left'))
             .fontSize(20)
             .fontColor([$r('app.color.ink')])
         }
@@ -2444,6 +2507,7 @@ export struct Session {
         .width('100%')
         .height('100%')
         .padding({
+          left: this.chromeLeftInsetVp(),
           right: this.chromeRightInsetVp(),
           bottom: this.chromeBottomInsetVp(),
         })
@@ -2451,18 +2515,17 @@ export struct Session {
         // Chrome overlays remount freely. Transparent so video under Blank receives taps;
         // Default parent would swallow all touches after the fold layout change.
         if (this.isHover()) {
-          Column() {
+          // Left keyboard/control | right remote display (horizontal dual-screen).
+          // No Scroll wrapper — hoverDock uses layoutWeight for QWERTY fill.
+          Row() {
+            Column() {
+              this.hoverDock()
+            }
+            .width(this.hoverDockWidthVp())
+            .height('100%')
             Blank()
               .layoutWeight(1)
               .hitTestBehavior(HitTestMode.None)
-            Scroll() {
-              this.hoverDock()
-            }
-            .scrollBar(BarState.Off)
-            .edgeEffect(EdgeEffect.None)
-            .layoutWeight(1)
-            .width('100%')
-            .backgroundColor(CHROME_BG)
           }
           .width('100%')
           .height('100%')
@@ -2506,7 +2569,7 @@ export struct Session {
       showClose: true,
       preferType: SheetType.BOTTOM,
       title: { title: $r('app.string.session_file_pull_title') },
-      backgroundColor: Color.White,
+      backgroundColor: $r('app.color.surface_card'),
       onAppear: () => {
         void this.loadBrowseDir(this.browsePath);
       },

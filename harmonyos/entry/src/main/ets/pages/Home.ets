@@ -1,17 +1,19 @@
 /**
  * Foldable-first Home with HDS immersive TabBar: 设备 | 设置.
- * Official glass: HdsTabs.barFloatingStyle.systemMaterialEffect (UI Design Kit).
- * preferSplit: list|detail inside 设备; 设置 embeds Settings content.
+ * Official glass: HdsTabs.barFloatingStyle + systemMaterialEffect (UI Design Kit
+ * floating sample / 沉浸光感). preferSplit: list|detail inside 设备; 设置 embeds Settings.
  * 新增 is a header "+" action (push DeviceEditor create) — not a tab.
  * Manage sheet aligns with Android EasyControlApp ManageDeviceSheet.
  * Gate B stays in Settings → Diagnostics (not primary chrome).
  */
 
-import { common } from '@kit.AbilityKit';
+import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import { hdsMaterial, HdsTabs, HdsTabsController } from '@kit.UIDesignKit';
 import { DeviceCard } from '../components/DeviceCard';
+import { CURRENT_COLOR_MODE_KEY, isDarkColorMode } from '../common/SystemInsets';
+import { ColdStartTrace } from '../common/ColdStartTrace';
 import { ConnectionPreset } from '../model/ConnectionPreset';
-import { Device } from '../model/Device';
+import { Device, displayDeviceName, isLazyDeviceName } from '../model/Device';
 import {
   DeviceInfoCache,
   RemoteSystemSnapshot,
@@ -26,20 +28,45 @@ import { PresetStore } from '../model/PresetStore';
 import { Settings } from './Settings';
 import {
   InstalledAppRow,
-  listRemoteThirdPartyApps,
-  probeRemoteSystemProps,
   RemoteSystemProps,
-} from '../session/LiveMirror';
+} from '../session/RemoteDeviceTypes';
+import {
+  listRemoteThirdPartyAppsLazy,
+  probeRemoteSystemPropsLazy,
+  probeTcpReachableLazy,
+} from '../session/LiveMirrorLazy';
+import { PENDING_FORM_NAV_KEY } from '../common/FormNav';
 import { SessionLaunchOpts, stageSessionLaunch } from '../session/SessionLaunch';
 
 const TAB_DEVICES: number = 0;
 const TAB_SETTINGS: number = 1;
-/** Tab bar content height (vp). Home-indicator inset is barFloatingStyle.barBottomMargin. */
+/** Tab bar content height (vp). Bottom lift is barFloatingStyle.barBottomMargin. */
 const TAB_BAR_CONTENT_VP: number = 56;
 /** Side inset for official floating HdsTabs bar (vp). */
 const TAB_BAR_SIDE_MARGIN_VP: number = 16;
+/**
+ * Official HdsTabs floating sample default (ui-design-hds-tabs-bar-floating).
+ * Used when safeBottomVp is 0; otherwise safeBottom + air gap lifts the pill.
+ */
+const TAB_BAR_OFFICIAL_BOTTOM_MARGIN_VP: number = 28;
+/** Extra air above the home-indicator inset when safeBottomVp > 0. */
+const TAB_BAR_SAFE_AIR_VP: number = 12;
 /** Extra gap above the floating pill when scrolling last rows into view. */
 const TAB_BAR_SCROLL_GAP_VP: number = 8;
+/** Header action slot — keep Devices/Settings header height identical. */
+const HEADER_ACTION_SLOT_VP: number = 40;
+/**
+ * Tighter floating pill for 2 tabs (official sample 200/300/400 is too wide).
+ * Phone ≈ 168; tablet / preferSplit modestly larger.
+ */
+const TAB_BAR_WIDTH_SM: number = 168;
+const TAB_BAR_WIDTH_MD: number = 184;
+const TAB_BAR_WIDTH_LG: number = 200;
+/**
+ * After fold expand / preferSplit flip, wait for layout animation to settle before
+ * dlopen + sync adbShellExec (adb_connect_authed). Shorter delays still jank expand.
+ */
+const DETAIL_PROBE_SETTLE_MS: number = 480;
 
 @Component
 export struct Home {
@@ -47,9 +74,15 @@ export struct Home {
   @Consume('preferSplit') @Watch('onPreferSplitChanged') preferSplit: boolean;
   @Consume('safeTopVp') safeTopVp: number;
   @Consume('safeBottomVp') safeBottomVp: number;
+  @StorageProp(CURRENT_COLOR_MODE_KEY) colorMode: number =
+    ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET;
   @StorageLink('deviceStoreRevision') @Watch('onDeviceStoreChanged')
   storeRevision: number = 0;
+  @StorageLink('presetStoreRevision') @Watch('onPresetStoreChanged')
+  presetRevision: number = 0;
   @State private devices: Device[] = [];
+  /** False until DeviceStore RDB init finishes — avoid flashing empty state on cold start. */
+  @State private devicesReady: boolean = false;
   @State @Watch('onSelectedUuidChanged') private selectedUuid: string = '';
   /** Single bindSheet host — chaining two bindSheets + bottom Tabs race-dismisses the sheet. */
   @State private showActionSheet: boolean = false;
@@ -70,21 +103,53 @@ export struct Home {
   @State private detailProbeBusy: boolean = false;
   private autoConnectTried: boolean = false;
   private probeSeq: number = 0;
+  private deferredProbeTimer: number = -1;
   private hdsTabsController: HdsTabsController = new HdsTabsController();
+  private devicesReadyMarked: boolean = false;
 
   aboutToAppear(): void {
+    ColdStartTrace.mark('Home.aboutToAppear.enter');
     AppStorage.setOrCreate('deviceStoreRevision', this.storeRevision);
     this.presetOptions = PresetStore.all();
-    this.reloadDevices();
+    if (DeviceStore.isReady()) {
+      this.markDevicesReady();
+      this.maybeAutoConnect();
+      ColdStartTrace.mark('Home.aboutToAppear.exit', 'store already ready');
+      return;
+    }
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
     void DeviceStore.init(ctx).then(() => {
-      this.reloadDevices();
+      this.markDevicesReady();
       this.maybeAutoConnect();
+    }).catch(() => {
+      // Exit loading even on failure so user can still add devices.
+      this.markDevicesReady();
     });
+    ColdStartTrace.mark('Home.aboutToAppear.exit', 'awaiting DeviceStore');
   }
 
   private onDeviceStoreChanged(): void {
+    if (DeviceStore.isReady()) {
+      this.markDevicesReady();
+    } else {
+      this.reloadDevices();
+    }
+  }
+
+  private onPresetStoreChanged(): void {
+    this.presetOptions = PresetStore.all();
+  }
+
+  private markDevicesReady(): void {
+    this.devicesReady = true;
     this.reloadDevices();
+    if (!this.devicesReadyMarked) {
+      this.devicesReadyMarked = true;
+      ColdStartTrace.mark('Home.devicesReady', `count=${this.devices.length}`);
+    }
+    if (this.selectedHasLazyName()) {
+      this.scheduleDeferredProbe('unnamed');
+    }
   }
 
   private reloadDevices(): void {
@@ -109,13 +174,63 @@ export struct Home {
   }
 
   private onSelectedUuidChanged(): void {
-    this.syncDetailInfoFromCache(this.preferSplit);
+    // Selection change: paint cache now; defer ADB so list taps stay responsive.
+    this.syncDetailInfoFromCache(this.preferSplit || this.selectedHasLazyName());
   }
 
   private onPreferSplitChanged(): void {
+    // Fold expand → preferSplit true rebuilds split chrome. Never start sync ADB on
+    // this Watch tick — that previously blocked uiForeground for seconds (adb_connect_authed).
+    this.cancelDeferredProbe();
+    this.syncDetailInfoFromCache(false);
     if (this.preferSplit) {
-      this.syncDetailInfoFromCache(true);
+      this.scheduleDeferredProbe('preferSplit');
     }
+  }
+
+  aboutToDisappear(): void {
+    this.cancelDeferredProbe();
+  }
+
+  private cancelDeferredProbe(): void {
+    if (this.deferredProbeTimer >= 0) {
+      clearTimeout(this.deferredProbeTimer);
+      this.deferredProbeTimer = -1;
+    }
+  }
+
+  /** Schedule auto-probe after layout settle; coalesces rapid fold/window events. */
+  private scheduleDeferredProbe(reason: string): void {
+    if (this.selectedUuid.length === 0) {
+      return;
+    }
+    const lazyName = this.selectedHasLazyName();
+    if (!this.preferSplit && !lazyName) {
+      return;
+    }
+    if (DeviceInfoCache.isFresh(this.selectedUuid)) {
+      if (lazyName) {
+        const snap = DeviceInfoCache.get(this.selectedUuid);
+        if (snap !== undefined && snap.model.trim().length > 0) {
+          void DeviceStore.applyProbedNameIfEmpty(this.selectedUuid, snap.model);
+        }
+      }
+      return;
+    }
+    this.cancelDeferredProbe();
+    ColdStartTrace.mark('Home.probeRemote.schedule', reason);
+    this.deferredProbeTimer = setTimeout((): void => {
+      this.deferredProbeTimer = -1;
+      if (!this.preferSplit && !this.selectedHasLazyName()) {
+        return;
+      }
+      this.probeSelectedDeviceInfo(false);
+    }, DETAIL_PROBE_SETTLE_MS);
+  }
+
+  private selectedHasLazyName(): boolean {
+    const device = this.selectedDevice();
+    return device !== undefined && isLazyDeviceName(device.name);
   }
 
   private resetDetailInfoPlaceholders(): void {
@@ -142,19 +257,20 @@ export struct Home {
   }
 
   /**
-   * Paint from cache immediately; optionally kick a background probe when stale.
-   * Never awaits — Home render must stay non-blocking.
+   * Paint from cache immediately. When autoProbe is true, schedule a settled deferred
+   * probe (never sync ADB on the calling stack — fold expand / cold start must stay free).
    */
   private syncDetailInfoFromCache(autoProbe: boolean): void {
     const uuid = this.selectedUuid;
     if (uuid.length === 0) {
+      this.cancelDeferredProbe();
       this.resetDetailInfoPlaceholders();
       return;
     }
     const snap = DeviceInfoCache.get(uuid);
     this.applySnapshotToDetail(snap);
-    if (autoProbe && this.preferSplit && !DeviceInfoCache.isFresh(uuid)) {
-      this.probeSelectedDeviceInfo(false);
+    if (autoProbe && !DeviceInfoCache.isFresh(uuid)) {
+      this.scheduleDeferredProbe('selection');
     }
   }
 
@@ -164,7 +280,11 @@ export struct Home {
       return;
     }
     if (!force && DeviceInfoCache.isFresh(device.uuid)) {
-      this.applySnapshotToDetail(DeviceInfoCache.get(device.uuid));
+      const cached = DeviceInfoCache.get(device.uuid);
+      this.applySnapshotToDetail(cached);
+      if (cached !== undefined && cached.model.trim().length > 0) {
+        void DeviceStore.applyProbedNameIfEmpty(device.uuid, cached.model);
+      }
       return;
     }
     const uuid = device.uuid;
@@ -174,10 +294,10 @@ export struct Home {
       this.detailStatus = '探测中…';
     }
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
-    void probeRemoteSystemProps(ctx, device).then((props: RemoteSystemProps) => {
-      if (seq !== this.probeSeq || this.selectedUuid !== uuid) {
-        return;
-      }
+    // Heavy work (dlopen + adb_connect_authed + getprop) runs on AdbProbeWorker.
+    ColdStartTrace.mark('Home.probeRemote.begin', uuid);
+    void probeRemoteSystemPropsLazy(ctx, device).then((props: RemoteSystemProps) => {
+      ColdStartTrace.mark('Home.probeRemote.end', props.ok ? 'ok' : props.detail);
       const snap = new RemoteSystemSnapshot();
       snap.probed = true;
       snap.probedAt = Date.now();
@@ -187,11 +307,16 @@ export struct Home {
         snap.model = props.model;
         snap.release = props.release;
         snap.sdk = props.sdk;
+        void DeviceStore.applyProbedNameIfEmpty(uuid, props.model);
       }
       DeviceInfoCache.put(uuid, snap);
+      if (seq !== this.probeSeq || this.selectedUuid !== uuid) {
+        return;
+      }
       this.applySnapshotToDetail(snap);
       this.detailProbeBusy = false;
     }).catch(() => {
+      ColdStartTrace.mark('Home.probeRemote.end', 'catch');
       if (seq !== this.probeSeq || this.selectedUuid !== uuid) {
         return;
       }
@@ -207,6 +332,11 @@ export struct Home {
 
   private maybeAutoConnect(): void {
     if (this.autoConnectTried) {
+      return;
+    }
+    const pending = AppStorage.get<string>(PENDING_FORM_NAV_KEY);
+    if (pending !== undefined && pending.length > 0) {
+      this.autoConnectTried = true;
       return;
     }
     this.autoConnectTried = true;
@@ -227,19 +357,39 @@ export struct Home {
     return undefined;
   }
 
-  /** Floating bar clearance above home indicator (official HdsTabs.barBottomMargin). */
+  /**
+   * HdsTabs barFloatingStyle.barBottomMargin — distance from container bottom to pill.
+   * Official sample uses 28vp. On real devices the container edge can still sit under the
+   * home indicator, so lift by safeBottomVp when reported (plus a small air gap).
+   * Floor at 28 so we never sit tighter than the official floating sample.
+   * @see https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ui-design-hds-tabs-bar-floating
+   */
   private floatingBarBottomMargin(): number {
-    return this.safeBottomVp > 0 ? this.safeBottomVp : 12;
+    return Math.max(
+      TAB_BAR_OFFICIAL_BOTTOM_MARGIN_VP,
+      this.safeBottomVp + TAB_BAR_SAFE_AIR_VP,
+    );
   }
 
   /**
    * Scroll end offset only — NOT a layout safe-area blank.
    * With barOverlap + floating HdsTabs, content paints under the translucent pill;
-   * regions not covered by the pill stay visible and hit-testable. This value only
-   * lets the last rows scroll clear of the pill.
+   * regions not covered by the pill stay visible and hit-testable.
    */
   private floatingTabScrollClearance(): number {
     return TAB_BAR_CONTENT_VP + this.floatingBarBottomMargin() + TAB_BAR_SCROLL_GAP_VP;
+  }
+
+  /** Floating glass mask — match page background so dark mode does not flash light. */
+  private tabGradientMaskColor(): string {
+    return isDarkColorMode(this.colorMode) ? '#66121212' : '#66F1F3F5';
+  }
+
+  private tabIconColor(selected: boolean): Resource {
+    if (selected) {
+      return $r('app.color.accent_blue');
+    }
+    return $r('app.color.text_secondary');
   }
 
   private toast(message: string): void {
@@ -268,8 +418,32 @@ export struct Home {
 
   private onConnect(device: Device): void {
     this.closeActionSheet();
+    void this.openSessionIfReachable(device, `正在连接 ${displayDeviceName(device)}`);
+  }
+
+  /**
+   * Fail fast via AdbProbeWorker TCP (settings timeout, default 500ms) instead of
+   * waiting on ADB AUTH / TLS (8s+20s) when the host or wireless-debug port is down.
+   */
+  private async openSessionIfReachable(
+    device: Device,
+    busyToast: string,
+    beforePush?: () => void
+  ): Promise<void> {
+    if (device.address.trim().length === 0 || device.adbPort <= 0) {
+      this.toast('请先填写设备地址和 ADB 端口');
+      return;
+    }
+    const reach = await probeTcpReachableLazy(device.address, device.adbPort);
+    if (!reach.ok) {
+      this.toast(reach.detail);
+      return;
+    }
+    if (beforePush !== undefined) {
+      beforePush();
+    }
     this.pathStack.pushPath({ name: 'session', param: device.uuid });
-    this.toast(`正在连接 ${device.name}`);
+    this.toast(busyToast);
   }
 
   private onManage(device: Device): void {
@@ -288,7 +462,7 @@ export struct Home {
   private confirmDelete(device: Device): void {
     AlertDialog.show({
       title: '删除设备',
-      message: `确定删除「${device.name}」？此操作不可撤销。`,
+      message: `确定删除「${displayDeviceName(device)}」？此操作不可撤销。`,
       primaryButton: {
         value: '取消',
         action: () => {
@@ -320,10 +494,10 @@ export struct Home {
     preset.applySessionOnly(sessionDev);
     const opts = new SessionLaunchOpts();
     opts.overrideDevice = sessionDev;
-    stageSessionLaunch(opts);
-    this.closeActionSheet();
-    this.pathStack.pushPath({ name: 'session', param: device.uuid });
-    this.toast(`已应用预设 · ${preset.name}`);
+    void this.openSessionIfReachable(device, `已应用预设 · ${preset.name}`, () => {
+      stageSessionLaunch(opts);
+      this.closeActionSheet();
+    });
   }
 
   /** Detail「应用预设」: session-only picker sheet (does not persist device). */
@@ -346,7 +520,7 @@ export struct Home {
     this.tempAppLoading = true;
     this.showActionSheet = true;
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
-    void listRemoteThirdPartyApps(ctx, device).then((rows: InstalledAppRow[]) => {
+    void listRemoteThirdPartyAppsLazy(ctx, device).then((rows: InstalledAppRow[]) => {
       this.tempAppRows = rows;
       this.tempAppLoading = false;
       if (rows.length === 0) {
@@ -375,10 +549,10 @@ export struct Home {
     // virtualWidth/Height/Dpi 0 → server uses physical display size (Android DisplayManager).
     const opts = new SessionLaunchOpts();
     opts.overrideDevice = sessionDev;
-    stageSessionLaunch(opts);
-    this.closeActionSheet();
-    this.pathStack.pushPath({ name: 'session', param: device.uuid });
-    this.toast(`虚拟屏启动 · ${pkg}`);
+    void this.openSessionIfReachable(device, `虚拟屏启动 · ${pkg}`, () => {
+      stageSessionLaunch(opts);
+      this.closeActionSheet();
+    });
   }
 
   private filteredTempApps(): InstalledAppRow[] {
@@ -422,9 +596,11 @@ export struct Home {
     sessionDev.startApp = '';
     const opts = new SessionLaunchOpts();
     opts.overrideDevice = sessionDev;
-    stageSessionLaunch(opts);
-    this.pathStack.pushPath({ name: 'session', param: device.uuid });
-    this.toast(facing === 'front' ? '正在连接前置摄像头…' : '正在连接后置摄像头…');
+    void this.openSessionIfReachable(device,
+      facing === 'front' ? '正在连接前置摄像头…' : '正在连接后置摄像头…',
+      () => {
+        stageSessionLaunch(opts);
+      });
   }
 
   @Builder
@@ -456,7 +632,7 @@ export struct Home {
     // Expanded detail pane owns session one-shots; it uses Edit|Delete inline.
     Column({ space: 4 }) {
       if (this.manageDevice !== undefined) {
-        Text(this.manageDevice.name)
+        Text(displayDeviceName(this.manageDevice))
           .fontSize(20)
           .fontWeight(FontWeight.Medium)
           .fontColor($r('app.color.ink'))
@@ -578,13 +754,12 @@ export struct Home {
       }, (preset: ConnectionPreset) => preset.id)
 
       Button('取消')
-        .type(ButtonType.Normal)
+        .type(ButtonType.Capsule)
         .width('100%')
-        .height(44)
+        .height(40)
         .margin({ top: 8 })
         .backgroundColor($r('app.color.surface_muted'))
         .fontColor($r('app.color.ink'))
-        .borderRadius($r('app.float.radius_md'))
         .onClick(() => {
           this.closeActionSheet();
         })
@@ -665,13 +840,12 @@ export struct Home {
       }
 
       Button('取消')
-        .type(ButtonType.Normal)
+        .type(ButtonType.Capsule)
         .width('100%')
-        .height(44)
+        .height(40)
         .margin({ top: 8 })
         .backgroundColor($r('app.color.surface_muted'))
         .fontColor($r('app.color.ink'))
-        .borderRadius($r('app.float.radius_md'))
         .onClick(() => {
           this.closeActionSheet();
         })
@@ -705,20 +879,25 @@ export struct Home {
         .fontColor($r('app.color.ink'))
         .layoutWeight(1)
 
+      // Fixed-size action slot — hiding "+" on Settings used to shrink the header and
+      // vertically jump the overlapping HdsTabs pill.
       if (this.currentTab === TAB_DEVICES) {
-        Button({ type: ButtonType.Normal }) {
+        Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.plus'))
             .fontSize(20)
             .fontColor([$r('app.color.ink')])
         }
-        .width(40)
-        .height(40)
+        .width(HEADER_ACTION_SLOT_VP)
+        .height(HEADER_ACTION_SLOT_VP)
         .backgroundColor($r('app.color.surface_card'))
-        .borderRadius($r('app.float.radius_md'))
         .accessibilityText($r('app.string.action_add_device'))
         .onClick(() => {
           this.openAddDevice();
         })
+      } else {
+        Blank()
+          .width(HEADER_ACTION_SLOT_VP)
+          .height(HEADER_ACTION_SLOT_VP)
       }
     }
     .width('100%')
@@ -726,7 +905,7 @@ export struct Home {
     .padding({
       left: $r('app.float.space_page_h'),
       right: $r('app.float.space_page_h'),
-      top: 10 + this.safeTopVp,
+      top: 10,
       bottom: 4,
     })
   }
@@ -736,10 +915,10 @@ export struct Home {
     Column({ space: 2 }) {
       SymbolGlyph(icon)
         .fontSize(22)
-        .fontColor([this.currentTab === index ? '#3A70FC' : '#99000000'])
+        .fontColor([this.tabIconColor(this.currentTab === index)])
       Text(title)
         .fontSize(10)
-        .fontColor(this.currentTab === index ? '#3A70FC' : '#99000000')
+        .fontColor(this.tabIconColor(this.currentTab === index))
     }
     .width('100%')
     .height('100%')
@@ -758,13 +937,12 @@ export struct Home {
         .fontColor($r('app.color.text_secondary'))
         .textAlign(TextAlign.Center)
       Button($r('app.string.action_add_device'))
-        .type(ButtonType.Normal)
+        .type(ButtonType.Capsule)
         .height(40)
         .margin({ top: 8 })
         .padding({ left: 20, right: 20 })
         .backgroundColor($r('app.color.accent_blue'))
-        .fontColor(Color.White)
-        .borderRadius($r('app.float.radius_md'))
+        .fontColor($r('app.color.on_accent'))
         .onClick(() => {
           this.openAddDevice();
         })
@@ -776,8 +954,24 @@ export struct Home {
   }
 
   @Builder
+  private devicesLoading() {
+    Column() {
+      LoadingProgress()
+        .width(40)
+        .height(40)
+        .color($r('app.color.accent_blue'))
+    }
+    .width('100%')
+    .layoutWeight(1)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+  }
+
+  @Builder
   private deviceList() {
-    if (this.devices.length === 0) {
+    if (!this.devicesReady) {
+      this.devicesLoading();
+    } else if (this.devices.length === 0) {
       this.emptyList();
     } else {
       List({ space: this.preferSplit ? 8 : 12 }) {
@@ -818,7 +1012,7 @@ export struct Home {
     if (device === undefined) {
       return '';
     }
-    return device.name.length > 0 ? device.name : '未命名设备';
+    return displayDeviceName(device);
   }
 
   private detailEndpoint(): string {
@@ -880,7 +1074,9 @@ export struct Home {
   @Builder
   private detailPane() {
     Column() {
-      if (this.selectedDevice() === undefined) {
+      if (!this.devicesReady) {
+        this.devicesLoading();
+      } else if (this.selectedDevice() === undefined) {
         Column({ space: 6 }) {
           Text($r('app.string.detail_empty_title'))
             .fontSize(18)
@@ -959,14 +1155,13 @@ export struct Home {
             .alignItems(VerticalAlign.Center)
 
             Button($r('app.string.action_connect'))
-              .type(ButtonType.Normal)
+              .type(ButtonType.Capsule)
               .width('100%')
-              .height(48)
+              .height(40)
               .fontSize(15)
               .fontWeight(FontWeight.Medium)
               .backgroundColor($r('app.color.brand_ink'))
-              .fontColor(Color.White)
-              .borderRadius($r('app.float.radius_md'))
+              .fontColor($r('app.color.on_brand_ink'))
               .onClick(() => {
                 const device = this.selectedDevice();
                 if (device !== undefined) {
@@ -1021,13 +1216,12 @@ export struct Home {
 
             Row({ space: 8 }) {
               Button($r('app.string.action_edit'))
-                .type(ButtonType.Normal)
+                .type(ButtonType.Capsule)
                 .layoutWeight(1)
                 .height(40)
                 .fontSize(14)
                 .backgroundColor($r('app.color.surface_muted'))
                 .fontColor($r('app.color.ink'))
-                .borderRadius($r('app.float.radius_md'))
                 .onClick(() => {
                   const device = this.selectedDevice();
                   if (device !== undefined) {
@@ -1036,13 +1230,12 @@ export struct Home {
                 })
 
               Button($r('app.string.action_delete'))
-                .type(ButtonType.Normal)
+                .type(ButtonType.Capsule)
                 .layoutWeight(1)
                 .height(40)
                 .fontSize(14)
                 .backgroundColor($r('app.color.surface_muted'))
                 .fontColor($r('app.color.danger'))
-                .borderRadius($r('app.float.radius_md'))
                 .onClick(() => {
                   const device = this.selectedDevice();
                   if (device !== undefined) {
@@ -1076,62 +1269,73 @@ export struct Home {
 
   @Builder
   private devicesTabContent() {
-    // Transparent scaffold so overlapping TabBar can sample list/detail pixels (no opaque fill).
-    if (this.preferSplit) {
-      Row({ space: 16 }) {
+    // Identical full-bleed scaffold as settingsTabContent so barOverlap geometry stays put.
+    Column() {
+      if (this.preferSplit) {
+        Row({ space: 16 }) {
+          Column() {
+            Text($r('app.string.home_devices_heading'))
+              .fontSize(13)
+              .fontColor($r('app.color.text_secondary'))
+              .width('100%')
+              .padding({ left: 14, bottom: 6 })
+            this.deviceList()
+          }
+          .width('34%')
+          .height('100%')
+          .backgroundColor(Color.Transparent)
+
+          Column() {
+            this.detailPane()
+          }
+          .layoutWeight(1)
+          .height('100%')
+          .padding({
+            right: $r('app.float.space_page_h'),
+            // Keep detail painted under the glass bar (scroll clearance is inside detailPane).
+            bottom: 8,
+            top: 0,
+          })
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .padding({ left: 8, top: 4 })
+        .backgroundColor(Color.Transparent)
+      } else {
         Column() {
-          Text($r('app.string.home_devices_heading'))
-            .fontSize(13)
-            .fontColor($r('app.color.text_secondary'))
-            .width('100%')
-            .padding({ left: 14, bottom: 6 })
           this.deviceList()
         }
-        .width('34%')
-        .height('100%')
-        .backgroundColor(Color.Transparent)
-
-        Column() {
-          this.detailPane()
-        }
+        .width('100%')
         .layoutWeight(1)
-        .height('100%')
-        .padding({
-          right: $r('app.float.space_page_h'),
-          // Keep detail painted under the glass bar (scroll clearance is inside detailPane).
-          bottom: 8,
-          top: 0,
-        })
+        .backgroundColor(Color.Transparent)
       }
-      .width('100%')
-      .height('100%')
-      .padding({ left: 8, top: 4 })
-      .backgroundColor(Color.Transparent)
-    } else {
-      Column() {
-        this.deviceList()
-      }
-      .width('100%')
-      .height('100%')
-      .backgroundColor(Color.Transparent)
     }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Color.Transparent)
   }
 
   @Builder
   private settingsTabContent() {
-    Settings({
-      embedded: true,
-      // Scroll clearance only — Settings must not treat TabBar as opaque safe-area blank.
-      tabBarInsetVp: this.floatingTabScrollClearance(),
-    })
+    Column() {
+      Settings({
+        embedded: true,
+        // Scroll clearance only — Settings must not treat TabBar as opaque safe-area blank.
+        tabBarInsetVp: this.floatingTabScrollClearance(),
+      })
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(Color.Transparent)
   }
 
   build() {
     Column() {
       this.headerBar()
 
-      // Official liquid glass / 沉浸光感: HdsTabs + barFloatingStyle.systemMaterialEffect
-      // (UI Design Kit). Do not hand-roll barBackgroundBlurStyle / barBackgroundEffect.
+      // Official floating + 沉浸光感 / 液态玻璃 (UI Design Kit HdsTabs).
+      // Sample: ui-design-hds-tabs-bar-floating — barFloatingStyle + systemMaterialEffect.
+      // Do not hand-roll barBackgroundBlurStyle / barBackgroundEffect.
       HdsTabs({
         barPosition: BarPosition.End,
         index: this.currentTab,
@@ -1153,8 +1357,22 @@ export struct Home {
       .barFloatingStyle({
         barSideMargin: TAB_BAR_SIDE_MARGIN_VP,
         barBottomMargin: this.floatingBarBottomMargin(),
+        // 智感握姿: wide pane shifts the pill toward the holding hand (API 23+).
+        adaptToHandedness: true,
+        // Narrower than official 200/300/400 — only two tabs.
+        barWidth: {
+          smallWidth: TAB_BAR_WIDTH_SM,
+          mediumWidth: TAB_BAR_WIDTH_MD,
+          largeWidth: TAB_BAR_WIDTH_LG,
+        },
+        // Theme-aware translucent mask — opaque #E6… killed liquid-glass sampling.
+        gradientMask: {
+          maskColor: this.tabGradientMaskColor(),
+          maskHeight: 92,
+        },
+        // Official immersive material (液态玻璃 / 沉浸光感) on supported devices.
         systemMaterialEffect: {
-          materialType: hdsMaterial.MaterialType.ADAPTIVE,
+          materialType: hdsMaterial.MaterialType.IMMERSIVE,
           materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE,
         },
       })
@@ -1169,13 +1387,11 @@ export struct Home {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.page_background'))
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
     .bindSheet($$this.showActionSheet, this.actionSheetBuilder(), {
       height: SheetSize.FIT_CONTENT,
       dragBar: true,
       showClose: true,
-      backgroundColor: Color.White,
+      backgroundColor: $r('app.color.surface_card'),
       preferType: SheetType.BOTTOM,
       onDisappear: () => {
         this.actionSheetKind = 0;

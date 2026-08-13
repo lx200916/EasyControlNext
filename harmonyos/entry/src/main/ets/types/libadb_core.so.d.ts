@@ -1,5 +1,6 @@
 /**
  * Type declarations for Gate B/E/D native module staged at entry/libs/arm64-v8a/libadb_core.so
+ * (produced by scripts/build_native_ohos.sh; Assemble runs that via entry/hvigorfile.ts → buildNativeOhos).
  */
 declare module 'libadb_core.so' {
   export interface VideoDecoderStatusNative {
@@ -13,6 +14,14 @@ declare module 'libadb_core.so' {
     height: number;
     useH265: boolean;
     surfaceId: string;
+    detail: string;
+  }
+
+  export interface DecoderCapsNative {
+    avc: boolean;
+    hevc: boolean;
+    opus: boolean;
+    aac: boolean;
     detail: string;
   }
 
@@ -110,6 +119,8 @@ declare module 'libadb_core.so' {
     videoDecoderRelease: () => void;
     /** Fold/layout: rebind NativeWindow; does not stop live ADB session. */
     videoDecoderRebindSurface: (surfaceId: string) => VideoDecoderStatusNative;
+    /** CreateByMime + Destroy for AVC/HEVC/Opus/AAC (JS thread; no surface). */
+    probeDecoderCaps: () => DecoderCapsNative;
     /** videoSource / cameraFacing / startApp are discrete args (object fields were dropped by NAPI). */
     liveSessionStart: (
       opts: LiveSessionStartNative | Record<string, Object>,

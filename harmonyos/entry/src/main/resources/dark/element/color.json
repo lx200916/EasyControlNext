@@ -22,11 +22,19 @@
     },
     {
       "name": "brand_ink",
-      "value": "#F3F4F6"
+      "value": "#3A3A3C"
+    },
+    {
+      "name": "on_brand_ink",
+      "value": "#FFFFFF"
     },
     {
       "name": "ink",
       "value": "#F3F4F6"
+    },
+    {
+      "name": "on_accent",
+      "value": "#FFFFFF"
     },
     {
       "name": "text_secondary",

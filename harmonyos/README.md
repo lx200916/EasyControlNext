@@ -20,15 +20,17 @@
 
 ## AI Skill（已安装）
 
-按 [harmonyos-ai-skill](https://github.com/DengShiyingA/harmonyos-ai-skill) 的 Cursor / 项目级说明安装：
+Always-on 只有项目规则；鸿蒙百科在 skill `references/` 里按需加载，避免重复灌进上下文。
 
 | 文件 | 用途 |
 |---|---|
-| `.cursor/rules/harmonyos.mdc` | Cursor 规则（编辑 `.ets` / `module.json5` 等时激活） |
-| `.claude/skills/harmonyos-development/SKILL.md` | Claude Code 项目级 skill |
-| `AGENTS.md` | AGENTS.md 标准（Codex / opencode 等） |
+| `AGENTS.md` | 本工程 always-on（控制器边界、API 24、DeviceStore、native `.so`、fold/split） |
+| `.cursor/rules/harmonyos.mdc` | 短提醒：跟 AGENTS.md；编辑 `.ets` / `json5` 时激活 |
+| `.claude/skills/harmonyos-development/` | 百科 canonical：瘦 `SKILL.md` + `references/` / `recipes/` / `examples/` |
+| `.cursor/skills/harmonyos-development/` | Cursor 发现入口（指向同一套 references） |
+| `.cursor/skills/easycontrol-harmonyos-port/` | 配对 / 直播 / native 移植脚注 |
 
-在本目录用 Cursor 打开工程后，提问 ArkTS / ArkUI / Stage 相关问题即可自动带上鸿蒙知识。
+提问 ArkTS / Kit API 时：先看 `AGENTS.md`，再按 skill 路由表读**一个** reference，不要整本百科贴进回答。
 
 ## 工程结构（摘要）
 
@@ -49,10 +51,34 @@ harmonyos/
 
 ```bash
 ./scripts/run_host_tests.sh          # Gate A：协议单元测试
-export OHOS_NDK_HOME=.../openharmony
-./scripts/build_native_ohos.sh       # Gate B：arm64 libadb_core.so
+export OHOS_NDK_HOME=.../openharmony # 可选；默认探测 DevEco openharmony SDK
+./scripts/build_native_ohos.sh       # Gate B：重建并 stage → entry/libs/arm64-v8a/libadb_core.so
 ./scripts/copy_server_jar.sh         # 从 Android Gradle 输出拷贝 server jar
 ```
+
+### 为什么 Assemble 里的 `.so` 以前总是旧的？
+
+`libadb_core.so` 是 **Rust (cargo/ohrs)** 产物，**不是** CMake / `externalNativeOptions` 编出来的。  
+DevEco Assemble 只会把 `entry/libs/arm64-v8a/` 里已有的 prebuilt `.so` 打进 HAP（任务 `default@ProcessLibs`）。  
+`entry/libs/` 还在 `.gitignore` 里，所以单纯点 Assemble **不会**跟着改 Rust 源码。
+
+现已在 `entry/hvigorfile.ts` 挂了 `buildNativeOhos`：Assemble / `hvigorw assembleHap` 会在 `ProcessLibs` 之前自动跑  
+`scripts/build_native_ohos.sh --if-needed`（源码比 staged `.so` 新才重建）。
+
+```bash
+# 正常：DevEco Assemble 或
+./hvigorw assembleHap -p product=default
+
+# 强制立刻重编 native（不看 mtime）
+./scripts/build_native_ohos.sh --force
+
+# 本机缺 Rust/NDK、只想用已有 staged .so 时
+SKIP_NATIVE_OHOS=1 ./hvigorw assembleHap
+# 或
+./hvigorw assembleHap -p skipNativeOhos=true
+```
+
+前提：本机已装 `rustup` 目标 `aarch64-unknown-linux-ohos`，且能访问 DevEco 的 `OHOS_NDK_HOME`（含 `native/llvm`）。
 
 ## 与 Android 的关系
 

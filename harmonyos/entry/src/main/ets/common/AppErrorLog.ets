@@ -27,6 +27,8 @@ const HILOG_TAG: string = 'EasyControlNext';
 export type ErrorLogLevel = 'E' | 'W';
 
 export class ErrorLogEntry {
+  /** Stable UI key — survives identical timestamps / tags after parse. */
+  id: string = '';
   timestampMs: number = 0;
   level: ErrorLogLevel = 'E';
   tag: string = 'app';
@@ -38,13 +40,15 @@ export class ErrorLogEntry {
     level: ErrorLogLevel,
     tag: string,
     message: string,
-    stackTrace: string = ''
+    stackTrace: string = '',
+    id: string = ''
   ) {
     this.timestampMs = timestampMs;
     this.level = level;
     this.tag = tag;
     this.message = message;
     this.stackTrace = stackTrace;
+    this.id = id.length > 0 ? id : `${timestampMs}_${level}_${Math.floor(Math.random() * 1e9)}`;
   }
 
   formatBlock(): string {
@@ -88,12 +92,25 @@ class AppErrorLogStore {
   private filesDir: string = '';
   private writeChain: Promise<void> = Promise.resolve();
 
+  /**
+   * Cold-start safe: bind filesDir + merge any entries appended before init.
+   * Do not sync-read error_log.txt before first frame — that blocked UI on real devices.
+   */
   init(context: common.Context): void {
     this.filesDir = context.filesDir;
     this.cleanupTmp();
     if (!this.loaded) {
+      const pending = this.entries.slice();
       this.loadFromDisk();
+      // Pre-init appends would otherwise be wiped by the first ensureLoaded().
+      for (let i = pending.length - 1; i >= 0; i--) {
+        this.entries.unshift(pending[i]);
+      }
+      this.trimToCaps();
       this.loaded = true;
+      if (pending.length > 0) {
+        this.enqueuePersist();
+      }
     }
   }
 
@@ -106,6 +123,8 @@ class AppErrorLogStore {
   }
 
   append(level: ErrorLogLevel, tag: string, message: string, stackTrace: string = ''): void {
+    // Load existing log before appending so a first post-start error does not wipe history.
+    this.ensureLoaded();
     const safeTag = truncateChars(tag.length > 0 ? tag : 'app', MAX_TAG_CHARS);
     const safeMsg = truncateChars(
       message.length > 0 ? message : (stackTrace.length > 0 ? '(exception)' : '(empty)'),
@@ -393,8 +412,8 @@ function parseBlock(block: string): ErrorLogEntry | undefined {
   const tag = header.substring(slash + 1);
   const level: ErrorLogLevel = levelChar.toUpperCase() === 'W' ? 'W' : 'E';
   const tsText = header.substring(0, space);
-  let ts = Date.parse(tsText.replace(' ', 'T'));
-  if (isNaN(ts)) {
+  let ts = parseTimestampMs(tsText);
+  if (ts <= 0) {
     ts = Date.now();
   }
   const message = lines.length > 1 ? lines[1] : '';
@@ -402,13 +421,46 @@ function parseBlock(block: string): ErrorLogEntry | undefined {
   if (lines.length > 2) {
     stack = lines.slice(2).join('\n');
   }
-  return new ErrorLogEntry(
-    ts,
-    level,
-    truncateChars(tag.length > 0 ? tag : 'log', MAX_TAG_CHARS),
-    truncateChars(message, MAX_MESSAGE_CHARS),
-    truncateChars(stack, MAX_STACK_CHARS)
-  );
+  const safeTag = truncateChars(tag.length > 0 ? tag : 'log', MAX_TAG_CHARS);
+  const safeMsg = truncateChars(message, MAX_MESSAGE_CHARS);
+  const safeStack = truncateChars(stack, MAX_STACK_CHARS);
+  // Stable-ish id so ForEach does not collapse rows that share the same ms/tag.
+  const id = `${ts}_${level}_${safeTag}_${safeMsg.length}_${safeStack.length}_${header.length}`;
+  return new ErrorLogEntry(ts, level, safeTag, safeMsg, safeStack, id);
+}
+
+/** Parse `YYYY-MM-DD HH:mm:ss.SSS` without relying on Date.parse locale quirks. */
+function parseTimestampMs(text: string): number {
+  // Expected: 2026-08-12 23:00:00.123
+  if (text.length < 19) {
+    const fallback = Date.parse(text.replace(' ', 'T'));
+    return isNaN(fallback) ? 0 : fallback;
+  }
+  const year = Number(text.substring(0, 4));
+  const month = Number(text.substring(5, 7));
+  const day = Number(text.substring(8, 10));
+  const hour = Number(text.substring(11, 13));
+  const minute = Number(text.substring(14, 16));
+  const second = Number(text.substring(17, 19));
+  let ms = 0;
+  if (text.length > 20 && text.charAt(19) === '.') {
+    const frac = text.substring(20);
+    if (frac.length === 1) {
+      ms = Number(frac) * 100;
+    } else if (frac.length === 2) {
+      ms = Number(frac) * 10;
+    } else {
+      ms = Number(frac.substring(0, 3));
+    }
+  }
+  if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hour) || isNaN(minute) || isNaN(second) ||
+    isNaN(ms)) {
+    const fallback = Date.parse(text.replace(' ', 'T'));
+    return isNaN(fallback) ? 0 : fallback;
+  }
+  const d = new Date(year, month - 1, day, hour, minute, second, ms);
+  const t = d.getTime();
+  return isNaN(t) ? 0 : t;
 }
 
 /** Singleton used by UI + session paths. */

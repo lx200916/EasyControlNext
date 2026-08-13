@@ -8,7 +8,7 @@ use std::time::Duration;
 use base64::Engine;
 use easycontrol_adb_client::{
   build_sync_push, connect_tcp, normalize_pair_code, pair_wireless, AdbSession, RsaAdbSigner,
-  SessionState,
+  SessionIo, SessionState,
 };
 use easycontrol_protocol::adb;
 use easycontrol_protocol::control;
@@ -33,7 +33,7 @@ pub fn native_version() -> String {
 /// Coarse capability banner for ArkTS diagnostics.
 #[napi]
 pub fn native_capabilities() -> String {
-  "protocol+adb_client_session+oh_videodecoder+oh_audiodecoder+live_gate_d+adb_screencap+adb_shell+adb_sync_pull+adb_pair_wireless; rsa_pem_napi; spake2_boringssl; test_signer=deterministic"
+  "protocol+adb_client_session+oh_videodecoder+oh_audiodecoder+live_gate_d+adb_screencap+adb_shell+adb_sync_pull+adb_pair_wireless+adb_stls_tls+live_pts_fix+vdec_render_at_time; rsa_pem_napi; spake2_boringssl; test_signer=deterministic"
     .to_string()
 }
 
@@ -292,6 +292,53 @@ pub fn video_decoder_release() {
   }
 }
 
+#[napi(object)]
+pub struct DecoderCapsJs {
+  pub avc: bool,
+  pub hevc: bool,
+  pub opus: bool,
+  pub aac: bool,
+  pub detail: String,
+}
+
+fn probe_label(ok: std::result::Result<(), String>) -> (bool, String) {
+  match ok {
+    Ok(()) => (true, "ok".into()),
+    Err(e) => (false, e),
+  }
+}
+
+/// JS-thread probe: `OH_VideoDecoder` / `OH_AudioCodec` CreateByMime + Destroy.
+/// Independent of a live session (does not bind a surface or replace STATE).
+#[napi]
+pub fn probe_decoder_caps() -> DecoderCapsJs {
+  #[cfg(target_env = "ohos")]
+  {
+    let (avc, avc_d) = probe_label(ohos_vdec::probe_create(false));
+    let (hevc, hevc_d) = probe_label(ohos_vdec::probe_create(true));
+    let (opus, opus_d) = probe_label(ohos_adec::probe_create(true));
+    let (aac, aac_d) = probe_label(ohos_adec::probe_create(false));
+    let detail = format!("avc={avc_d}; hevc={hevc_d}; opus={opus_d}; aac={aac_d}");
+    return DecoderCapsJs {
+      avc,
+      hevc,
+      opus,
+      aac,
+      detail,
+    };
+  }
+  #[cfg(not(target_env = "ohos"))]
+  {
+    DecoderCapsJs {
+      avc: false,
+      hevc: false,
+      opus: false,
+      aac: false,
+      detail: "host stub: no OH_VideoDecoder".into(),
+    }
+  }
+}
+
 /// Rebind OH_VideoDecoder to a new XComponent surfaceId after fold/layout recreate.
 /// Keeps the live AU feed / ADB session intact — media surface only.
 #[napi]
@@ -466,7 +513,7 @@ pub struct AdbAuthOptsJs {
   pub public_key_line: Option<Buffer>,
 }
 
-fn adb_connect_authed(opts: &AdbAuthOptsJs) -> Result<AdbSession<std::net::TcpStream>> {
+fn adb_connect_authed(opts: &AdbAuthOptsJs) -> Result<AdbSession<SessionIo>> {
   let port = opts.adb_port as u16;
   if opts.host.is_empty() || port == 0 {
     return Err(Error::from_reason("host/adbPort required"));
@@ -480,8 +527,14 @@ fn adb_connect_authed(opts: &AdbAuthOptsJs) -> Result<AdbSession<std::net::TcpSt
   .map_err(|e| Error::from_reason(e.to_string()))?;
   let stream = connect_tcp(&opts.host, port, Duration::from_secs(8))
     .map_err(|e| Error::from_reason(e.to_string()))?;
-  let session = AdbSession::connect(stream, &signer, Duration::from_secs(20))
-    .map_err(|e| Error::from_reason(e.to_string()))?;
+  let session = AdbSession::connect_with_key(
+    stream,
+    &signer,
+    &opts.private_key_pem,
+    &opts.host,
+    Duration::from_secs(20),
+  )
+  .map_err(|e| Error::from_reason(e.to_string()))?;
   if session.state() != SessionState::Connected {
     return Err(Error::from_reason("adb not connected"));
   }

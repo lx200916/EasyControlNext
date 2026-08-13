@@ -8,7 +8,7 @@ HarmonyOS controller native stack:
 | `adb_client` (`easycontrol-adb-client`) | TCP session FSM, stream mux, shell/sync/tcp helpers, fake daemon tests |
 | `adb_core` | ohos-rs Node-API cdylib exporting coarse binary-safe APIs |
 
-**Signer policy:** `DeterministicTestSigner` is for host tests only. `PendingProductionSigner` returns an explicit error until HUKS-backed RSA ADB keys land — do not treat test signatures as production auth.
+**Signer policy:** `DeterministicTestSigner` is for host tests only. On-device keys are generated per install and HUKS-wrapped (`AdbHuksWrap`). `PendingProductionSigner` remains a deprecated explicit-error stub. Host Gate C/D still load `native/.adb-keys/`.
 
 **No handwritten C++ NAPI.** Optional C ABI only appears inside third-party Rust crates (document if introduced).
 
@@ -48,12 +48,19 @@ From repo `harmonyos/`:
 
 ```bash
 export OHOS_NDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony
-./scripts/build_native_ohos.sh
+./scripts/build_native_ohos.sh            # always rebuild + stage
+./scripts/build_native_ohos.sh --if-needed  # skip when entry/libs .so already fresh
+./scripts/build_native_ohos.sh --force
 ```
 
-Artifacts land under `native/adb_core/dist/` (ohrs) or `native/target/aarch64-unknown-linux-ohos/release/` (cargo fallback).
+The script **always stages** into `entry/libs/arm64-v8a/libadb_core.so` (gitignored).  
+Intermediate artifacts also exist under `native/adb_core/dist/` (ohrs) or `native/target/aarch64-unknown-linux-ohos/release/` (cargo).
 
-Copy the produced `libadb_core.so` into the entry module libs path used by your DevEco SDK version (commonly `entry/libs/arm64-v8a/`), then from ArkTS:
+**DevEco Assemble does not compile Rust.** It only packages that staged prebuilt via `default@ProcessLibs`.  
+`entry/hvigorfile.ts` registers `buildNativeOhos` so Assemble / `hvigorw assembleHap` runs the script `--if-needed` before packaging.  
+Escape hatch: `SKIP_NATIVE_OHOS=1` or `-p skipNativeOhos=true` (still requires an existing staged `.so`).
+
+From ArkTS:
 
 ```ts
 import adbCore from 'libadb_core.so';
@@ -61,8 +68,6 @@ import adbCore from 'libadb_core.so';
 const echoed = adbCore.roundTripBytes(new Uint8Array([1, 2, 3]).buffer);
 const ver = adbCore.nativeVersion();
 ```
-
-Exact import/package wiring can follow the `ohrs` dist layout for the installed CLI version.
 
 ## Exported NAPI surface (PoC / Phase 1)
 
@@ -129,8 +134,10 @@ NAPI (background thread; ArkTS polls):
 Session UX: Connect → try live (rawfile jar + Gate C RSA) → OH_VideoDecoder stream; on error/timeout → fixture toast fallback.
 
 ```bash
-./scripts/build_native_ohos.sh
-# DevEco / hvigorw assembleHap, then:
+# Assemble itself refreshes libadb_core.so when native sources changed:
+./hvigorw assembleHap -p product=default
+# (or DevEco Build → Assemble HAP; same buildNativeOhos hook)
+
 hdc -t 127.0.0.1:5559 file send entry/build/default/outputs/default/entry-default-signed.hap /data/local/tmp/entry.hap
 hdc -t 127.0.0.1:5559 shell bm install -p /data/local/tmp/entry.hap
 hdc -t 127.0.0.1:5559 shell aa start -a EntryAbility -b com.shiyunjin.easycontrolnext -m entry

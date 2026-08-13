@@ -1,9 +1,12 @@
 ---
 description: New features must prefer Jetpack Compose (Material3) over XML/View UI
-alwaysApply: true
+alwaysApply: false
+globs: easycontrolnext/**/*.kt,easycontrolnext/**/*.kts,easycontrolnext/app/src/main/java/com/shiyunjin/easycontrolnext/app/ui/**
 ---
 
 # Compose-first UI
+
+Applies to the **Android** app under `easycontrolnext/` only — not to `harmonyos/`.
 
 - New feature UI must use **Jetpack Compose + Material3** under `easycontrolnext/app/src/main/java/com/shiyunjin/easycontrolnext/app/ui/`.
 - Do **not** add new XML layouts or View-based `Activity` screens for new feature UI.

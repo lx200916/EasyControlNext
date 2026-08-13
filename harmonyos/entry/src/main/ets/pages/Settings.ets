@@ -1,23 +1,26 @@
 /**
- * U4 Settings lite — about/version, presets, error logs, language stub.
- * Gate B native probe lives under Diagnostics (not on Home primary chrome).
- * sm: grouped list; preferSplit: left category + right content.
+ * U4 Settings — about, general, connection presets, diagnostics.
+ * sm: stacked cards; preferSplit: left category + right content.
  * Home 设置 tab embeds this with embedded=true (no NavDestination / back chrome).
  */
 
 import { GateBDebugStrip } from '../components/GateBDebugStrip';
-import { AppSettings } from '../common/AppSettings';
+import { DecodeCapsStrip } from '../components/DecodeCapsStrip';
+import { PresetListPanel } from '../components/PresetListPanel';
+import { AppSettings, CONNECT_PROBE_TIMEOUT_DEFAULT_MS, CONNECT_PROBE_TIMEOUT_OPTIONS_MS } from '../common/AppSettings';
 
 const CAT_ABOUT: string = 'about';
 const CAT_GENERAL: string = 'general';
 const CAT_CONNECTION: string = 'connection';
 const CAT_DIAGNOSTICS: string = 'diagnostics';
 
+const LANG_SYSTEM: string = '跟随系统';
+const LANG_ZH: string = '简体中文';
+
 @Component
 export struct Settings {
   @Consume('pathStack') pathStack: NavPathStack;
   @Consume('preferSplit') preferSplit: boolean;
-  @Consume('safeTopVp') safeTopVp: number;
   @Consume('safeBottomVp') safeBottomVp: number;
   /** When true, render as Home tab content without NavDestination / back chrome. */
   @Prop embedded: boolean = false;
@@ -27,12 +30,37 @@ export struct Settings {
    */
   @Prop tabBarInsetVp: number = 0;
   @State private category: string = CAT_ABOUT;
-  @State private languageLabel: string = '跟随系统';
+  @State private languageLabel: string = LANG_SYSTEM;
   @State private sessionBackToRemote: boolean = true;
+  @State private showLanguageSheet: boolean = false;
+  @State private probeTimeoutMs: number = CONNECT_PROBE_TIMEOUT_DEFAULT_MS;
+  @State private probeTimeoutIndex: number = 1;
+  private readonly probeTimeoutLabels: string[] = ['300 ms', '500 ms（默认）', '800 ms', '1.5 s', '3 s'];
 
   aboutToAppear(): void {
     this.sessionBackToRemote = AppSettings.isSessionBackToRemote();
+    this.probeTimeoutMs = AppSettings.connectProbeTimeoutMs();
+    this.probeTimeoutIndex = this.indexOfTimeout(this.probeTimeoutMs);
   }
+
+  private indexOfTimeout(ms: number): number {
+    for (let i = 0; i < CONNECT_PROBE_TIMEOUT_OPTIONS_MS.length; i++) {
+      if (CONNECT_PROBE_TIMEOUT_OPTIONS_MS[i] === ms) {
+        return i;
+      }
+    }
+    return 1;
+  }
+
+  private onProbeTimeoutSelect(index: number): void {
+    if (index < 0 || index >= CONNECT_PROBE_TIMEOUT_OPTIONS_MS.length) {
+      return;
+    }
+    this.probeTimeoutIndex = index;
+    this.probeTimeoutMs = CONNECT_PROBE_TIMEOUT_OPTIONS_MS[index];
+    void AppSettings.setConnectProbeTimeoutMs(this.probeTimeoutMs);
+  }
+
   private toast(message: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({
@@ -52,36 +80,10 @@ export struct Settings {
     return 24 + this.safeBottomVp;
   }
 
-  @Builder
-  private titleBar() {
-    Row({ space: 8 }) {
-      if (!this.embedded) {
-        Button({ type: ButtonType.Normal }) {
-          SymbolGlyph($r('sys.symbol.chevron_left'))
-            .fontSize(22)
-            .fontColor([$r('app.color.ink')])
-        }
-        .width(40)
-        .height(40)
-        .backgroundColor(Color.Transparent)
-        .onClick(() => {
-          this.pathStack.pop();
-        })
-      }
-
-      Text($r('app.string.settings_title'))
-        .fontSize(20)
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.ink'))
-        .layoutWeight(1)
-    }
-    .width('100%')
-    .padding({
-      left: this.embedded ? $r('app.float.space_page_h') : 8,
-      right: $r('app.float.space_page_h'),
-      top: this.embedded ? 4 : (8 + this.safeTopVp),
-      bottom: 4,
-    })
+  private selectLanguage(label: string): void {
+    this.languageLabel = label;
+    this.showLanguageSheet = false;
+    this.toast(`语言 · ${label}`);
   }
 
   @Builder
@@ -144,13 +146,14 @@ export struct Settings {
     .padding(8)
   }
 
+  /** Navigation-style row (chevron). */
   @Builder
-  private settingsRow(title: Resource, subtitle: string, enabled: boolean, onTap: () => void) {
+  private navRow(title: Resource, subtitle: string, onTap: () => void) {
     Row() {
       Column({ space: 2 }) {
         Text(title)
           .fontSize(16)
-          .fontColor(enabled ? $r('app.color.ink') : $r('app.color.text_secondary'))
+          .fontColor($r('app.color.ink'))
         if (subtitle.length > 0) {
           Text(subtitle)
             .fontSize(12)
@@ -160,26 +163,57 @@ export struct Settings {
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
 
-      if (enabled) {
-        SymbolGlyph($r('sys.symbol.chevron_right'))
-          .fontSize(16)
-          .fontColor([$r('app.color.text_secondary')])
-      } else {
-        Text($r('app.string.settings_coming_soon'))
-          .fontSize(11)
-          .fontColor($r('app.color.text_secondary'))
-      }
+      SymbolGlyph($r('sys.symbol.chevron_right'))
+        .fontSize(16)
+        .fontColor([$r('app.color.text_secondary')])
     }
     .width('100%')
     .padding({ left: 16, right: 16, top: 14, bottom: 14 })
-    .opacity(enabled ? 1 : 0.7)
     .onClick(() => {
-      if (enabled) {
-        onTap();
-      } else {
-        this.toast('即将推出');
-      }
+      onTap();
     })
+  }
+
+  /** Read-only value row (no chevron / no tap). */
+  @Builder
+  private valueRow(title: Resource, value: string) {
+    Row() {
+      Text(title)
+        .fontSize(16)
+        .fontColor($r('app.color.ink'))
+        .layoutWeight(1)
+      Text(value)
+        .fontSize(14)
+        .fontColor($r('app.color.text_secondary'))
+        .textAlign(TextAlign.End)
+    }
+    .width('100%')
+    .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+  }
+
+  /** Toggle row — HarmonyOS settings pattern. */
+  @Builder
+  private toggleRow(title: Resource, hint: Resource, isOn: boolean, onChange: (on: boolean) => void) {
+    Row({ space: 12 }) {
+      Column({ space: 2 }) {
+        Text(title)
+          .fontSize(16)
+          .fontColor($r('app.color.ink'))
+        Text(hint)
+          .fontSize(12)
+          .fontColor($r('app.color.text_secondary'))
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+
+      Toggle({ type: ToggleType.Switch, isOn: isOn })
+        .selectedColor($r('app.color.brand_primary'))
+        .onChange((on: boolean) => {
+          onChange(on);
+        })
+    }
+    .width('100%')
+    .padding({ left: 16, right: 16, top: 14, bottom: 14 })
   }
 
   @Builder
@@ -200,13 +234,11 @@ export struct Settings {
 
       Divider().color($r('app.color.divider'))
 
-      this.settingsRow($r('app.string.settings_version'), '1.0.0 (1000000)', false, () => {
-      })
+      this.valueRow($r('app.string.settings_version'), '1.0.0 (1000000)')
 
       Divider().color($r('app.color.divider')).margin({ left: 16 })
 
-      this.settingsRow($r('app.string.settings_bundle'), 'com.shiyunjin.easycontrolnext', false, () => {
-      })
+      this.valueRow($r('app.string.settings_bundle'), 'com.shiyunjin.easycontrolnext')
 
       Divider().color($r('app.color.divider')).margin({ left: 16 })
 
@@ -223,10 +255,25 @@ export struct Settings {
   @Builder
   private generalContent() {
     Column({ space: 0 }) {
-      this.settingsRow($r('app.string.settings_language'), this.languageLabel, true, () => {
-        this.languageLabel = this.languageLabel === '跟随系统' ? '简体中文' : '跟随系统';
-        this.toast(`语言 · ${this.languageLabel}`);
+      this.navRow($r('app.string.settings_language'), this.languageLabel, () => {
+        this.showLanguageSheet = true;
       })
+
+      Divider().color($r('app.color.divider')).margin({ left: 16 })
+
+      this.toggleRow(
+        $r('app.string.settings_session_back_remote'),
+        $r('app.string.settings_session_back_remote_hint'),
+        this.sessionBackToRemote,
+        (on: boolean) => {
+          this.sessionBackToRemote = on;
+          void AppSettings.setSessionBackToRemote(on);
+        }
+      )
+
+      Divider().color($r('app.color.divider')).margin({ left: 16 })
+
+      DecodeCapsStrip()
 
       Divider().color($r('app.color.divider')).margin({ left: 16 })
 
@@ -242,51 +289,47 @@ export struct Settings {
 
   @Builder
   private connectionContent() {
-    Column({ space: 0 }) {
-      this.settingsRow($r('app.string.settings_presets'), '内置预设 · 应用到设备', true, () => {
-        this.pathStack.pushPath({ name: 'presets' });
-      })
-
-      Divider().color($r('app.color.divider')).margin({ left: 16 })
-
-      Row() {
-        Column({ space: 2 }) {
-          Text($r('app.string.settings_session_back_remote'))
-            .fontSize(16)
-            .fontColor($r('app.color.ink'))
-          Text($r('app.string.settings_session_back_remote_hint'))
-            .fontSize(12)
-            .fontColor($r('app.color.text_secondary'))
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-
-        Toggle({ type: ToggleType.Switch, isOn: this.sessionBackToRemote })
-          .selectedColor($r('app.color.brand_primary'))
-          .onChange((on: boolean) => {
-            this.sessionBackToRemote = on;
-            void AppSettings.setSessionBackToRemote(on);
+    Column({ space: 12 }) {
+      Column({ space: 8 }) {
+        Text($r('app.string.settings_probe_timeout'))
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.ink'))
+          .width('100%')
+        Text($r('app.string.settings_probe_timeout_hint'))
+          .fontSize(12)
+          .fontColor($r('app.color.text_secondary'))
+          .width('100%')
+        Select([
+          { value: '300 ms' },
+          { value: '500 ms（默认）' },
+          { value: '800 ms' },
+          { value: '1.5 s' },
+          { value: '3 s' },
+        ])
+          .selected(this.probeTimeoutIndex)
+          .value(this.probeTimeoutLabels[this.probeTimeoutIndex])
+          .width('100%')
+          .height(44)
+          .onSelect((index: number) => {
+            this.onProbeTimeoutSelect(index);
           })
       }
       .width('100%')
-      .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+      .alignItems(HorizontalAlign.Start)
+      .padding(16)
+      .backgroundColor($r('app.color.surface_card'))
+      .borderRadius($r('app.float.radius_detail_panel'))
 
-      Divider().color($r('app.color.divider')).margin({ left: 16 })
-
-      Text($r('app.string.settings_connection_hint'))
-        .fontSize(12)
-        .fontColor($r('app.color.text_secondary'))
-        .padding(16)
+      PresetListPanel()
     }
     .width('100%')
-    .backgroundColor($r('app.color.surface_card'))
-    .borderRadius($r('app.float.radius_detail_panel'))
   }
 
   @Builder
   private diagnosticsContent() {
     Column({ space: 0 }) {
-      this.settingsRow($r('app.string.settings_error_logs'), '浏览、筛选、复制本机错误日志', true, () => {
+      this.navRow($r('app.string.settings_error_logs'), '浏览、筛选、复制本机错误日志', () => {
         this.pathStack.pushPath({ name: 'error_logs' });
       })
 
@@ -368,13 +411,57 @@ export struct Settings {
   }
 
   @Builder
+  private languageSheetBuilder() {
+    Column({ space: 0 }) {
+      Text($r('app.string.settings_language'))
+        .fontSize(18)
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.ink'))
+        .width('100%')
+        .padding({ bottom: 12 })
+
+      this.languageOption(LANG_SYSTEM)
+      Divider().color($r('app.color.divider'))
+      this.languageOption(LANG_ZH)
+
+      Button('取消')
+        .type(ButtonType.Capsule)
+        .width('100%')
+        .height(40)
+        .margin({ top: 16 })
+        .backgroundColor($r('app.color.surface_muted'))
+        .fontColor($r('app.color.ink'))
+        .onClick(() => {
+          this.showLanguageSheet = false;
+        })
+    }
+    .width('100%')
+    .padding({ left: 20, right: 20, top: 8, bottom: 28 + this.safeBottomVp })
+  }
+
+  @Builder
+  private languageOption(label: string) {
+    Row() {
+      Text(label)
+        .fontSize(16)
+        .fontColor($r('app.color.ink'))
+        .layoutWeight(1)
+      if (this.languageLabel === label) {
+        SymbolGlyph($r('sys.symbol.checkmark'))
+          .fontSize(18)
+          .fontColor([$r('app.color.accent_blue')])
+      }
+    }
+    .width('100%')
+    .padding({ top: 14, bottom: 14 })
+    .onClick(() => {
+      this.selectLanguage(label);
+    })
+  }
+
+  @Builder
   private settingsBody() {
     Column() {
-      // Embedded under Home「设置」tab — skip redundant page title.
-      if (!this.embedded) {
-        this.titleBar()
-      }
-
       if (this.preferSplit) {
         Row({ space: 12 }) {
           Column() {
@@ -405,7 +492,6 @@ export struct Settings {
           left: $r('app.float.space_page_h'),
           right: $r('app.float.space_page_h'),
           top: 8,
-          // Layout extends under floating TabBar; scroll clearance is contentEndOffset.
           bottom: 8,
         })
       } else {
@@ -415,9 +501,6 @@ export struct Settings {
     .width('100%')
     .height('100%')
     .backgroundColor(this.embedded ? Color.Transparent : $r('app.color.page_background'))
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM],
-      [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
   }
 
   build() {
@@ -427,15 +510,31 @@ export struct Settings {
       }
       .width('100%')
       .height('100%')
+      .bindSheet($$this.showLanguageSheet, this.languageSheetBuilder(), {
+        height: SheetSize.FIT_CONTENT,
+        dragBar: true,
+        showClose: true,
+        backgroundColor: $r('app.color.surface_card'),
+      })
     } else {
       NavDestination() {
         this.settingsBody()
       }
-      .hideTitleBar(true)
+      .title($r('app.string.settings_title'))
+      .hideTitleBar(false)
       .backgroundColor($r('app.color.page_background'))
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM],
-        [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
+      .bindSheet($$this.showLanguageSheet, this.languageSheetBuilder(), {
+        height: SheetSize.FIT_CONTENT,
+        dragBar: true,
+        showClose: true,
+        backgroundColor: $r('app.color.surface_card'),
+      })
+      .bindSheet($$this.showLanguageSheet, this.languageSheetBuilder(), {
+        height: SheetSize.FIT_CONTENT,
+        dragBar: true,
+        showClose: true,
+        backgroundColor: $r('app.color.surface_card'),
+      })
       .onBackPressed(() => {
         this.pathStack.pop();
         return true;

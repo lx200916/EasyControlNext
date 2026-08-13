@@ -331,25 +331,25 @@ public final class Device {
 
   public static void changePower(int mode) {
     if (mode == -1) {
-      keyEvent(26, 0);
+      keyEvent(KeyEvent.KEYCODE_POWER, 0);
       return;
     }
+    if (mode == 1) {
+      // WAKEUP lights a sleeping panel and is a no-op if already on.
+      // POWER would toggle a lit lock-screen off.
+      keyEvent(KeyEvent.KEYCODE_WAKEUP, 0);
+      return;
+    }
+    // mode 0 = want off. POWER on an already-off panel would wake it.
     try {
       Boolean isScreenOn = readIsScreenOn();
-      // mode 1 = want on, 0 = want off. Toggle POWER only when state disagrees.
-      // If dumpsys cannot be parsed (OEM variants), still wake for mode==1 —
-      // otherwise connect leaves a frozen lock-wallpaper mirror with dead touch.
-      if (isScreenOn == null) {
-        if (mode == 1) keyEvent(26, 0);
-        return;
+      if (isScreenOn == null || isScreenOn) {
+        keyEvent(KeyEvent.KEYCODE_POWER, 0);
       }
-      if (isScreenOn ^ (mode == 1)) keyEvent(26, 0);
     } catch (Exception ignored) {
-      if (mode == 1) {
-        try {
-          keyEvent(26, 0);
-        } catch (Exception ignored2) {
-        }
+      try {
+        keyEvent(KeyEvent.KEYCODE_POWER, 0);
+      } catch (Exception ignored2) {
       }
     }
   }

@@ -138,11 +138,11 @@ harmonyos/
 - [x] `AdbSigner` trait + `DeterministicTestSigner` (host) + `RsaAdbSigner` (RSA-2048 ADB wire format)
 - [x] Host fake daemon + integration tests (handshake, shell echo, sync push/pull, tcp echo, flow control, malformed, timeout, close, bad auth)
 - [x] Gate C on real Android device (`gate_c` bin vs `192.168.31.60:5555`: AUTH+CNXN, shell, sync push+sha256, tcp echo)
-- [ ] HUKS / Asset Store wrapping for on-device HarmonyOS key storage (host PEM path done for Gate C)
+- [x] HUKS AES-256-GCM wrapping for on-device ADB RSA (`AdbHuksWrap` + `AdbKeyAssets`; AUTH sign remains Rust SHA-1). Host PEM path kept for Gate C/D.
 
 ### Phase 3 — TLS connect and wireless pairing
 
-- [ ] A_STLS + TLS 1.3 for **ADB session** connect after pairing (`rustls` preferred) — still open; pairing path uses its own TLS 1.3
+- [x] A_STLS + TLS 1.3 for **ADB session** connect after pairing (`AdbSession::connect_with_key` + `tls_client::upgrade_tcp_to_tls`; requires rebuilt `libadb_core.so`)
 - [x] Pairing TLS 1.3 (`rustls` + accept-any server cert) + client RSA/X.509 from PEM (`rcgen`) for wireless pairing handshake
 - [x] Pairing framing, exporter `adb-label\0` (64 B), HKDF-SHA256, AES-128-GCM, peer-info (`native/adb_client/src/pairing/`)
 - [x] **CRITICAL:** AOSP/BoringSSL-compatible SPAKE2-25519 via `curve25519-dalek` + custom scalar multiply (preserves AOSP bit-255 / `left_shift3`); host tests vs BoringSSL oracle + Alice/Bob roundtrip — **not** RustCrypto `spake2`. Live Android 11+ wireless pair **not yet verified** on-device
@@ -188,6 +188,7 @@ harmonyos/
 - [ ] Responsive phone/tablet/2in1 polish beyond foldable Home; no floatView/USB blockers for MVP
 - [x] Foldable-first layout helper (`entry/.../common/Breakpoint.ets`: sm/md/lg + fold posture + preferSplit)
 - [x] Home reacts to fold/unfold via `startLayoutWatch` / `preferSplit` if/else (verify on foldable emulator `127.0.0.1:5559`)
+- [x] Desktop service card (`EntryFormAbility` + `deviceList` 2*2/2*4): device names, tap → Session/Home
 
 **Android UI reference (for ArkUI parity)**
 
@@ -381,4 +382,6 @@ cargo run -p easycontrol-adb-client --bin gate_d -- 192.168.31.60 5555
 | 2026-08-12 | **Device-mgmt parity**: Home manage sheet (Connect/Edit/Delete/session preset/temp app/camera toast); DeviceEditor video+connectOnStart; Presets lite (3 built-ins, link `presetId`); DeviceDb columns `presetId`/`connectOnStart`/`changeToFullOnConnect`; SessionLaunch overrides. |
 | 2026-08-12 | **Camera + virtual-display temp app**: Device → LiveMirror → `app_process` (`videoSource`/`cameraFacing`/`startApp`/VD size); SDK gates API 31+/30+. Fixes: NAPI passes source/`startApp` as discrete string args (object fields were dropped); `connect_dual` ignores MIUI non-fatal theme `FileNotFoundException`. Verified VD `startApp=com.kroegerama.appchecker` + `easycontrol` display on marble. |
 
-**Next milestone:** live pair vs Android 11+ wireless debugging (e.g. `192.168.31.60`); A_STLS session TLS connect; live camera first-frame confirmation; Gate E metrics; HUKS; preferences.
+| 2026-08-13 | **HUKS wrap + service card**: per-install RSA-2048 PKCS#8, AES-256-GCM wrap (`AdbHuksWrap`) → `filesDir/adb_rsa_huks.bin`; LiveMirror/pairing/probe stop using bundled rawfile PEM. Desktop `deviceList` Form Kit card 2*2/2*4, tap → Session/Home. |
+
+**Next milestone:** live pair vs Android 11+ wireless debugging (e.g. `192.168.31.60`); live first-frame confirmation (Gate E); Gate G soak; license notices.

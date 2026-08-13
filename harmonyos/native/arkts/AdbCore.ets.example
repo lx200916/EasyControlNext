@@ -1,14 +1,10 @@
 /**
- * EXAMPLE — copy into entry/src/main/ets/native/ after Gate B .so is staged:
- *   ./scripts/build_native_ohos.sh
- *   → entry/libs/arm64-v8a/libadb_core.so
- *
- * Then add a page that imports this module (do not leave the import in the
- * default Index route until the .so is present; entry/libs is gitignored).
+ * EXAMPLE — production wrapper lives at entry/src/main/ets/native/AdbCore.ets.
+ * Assemble runs scripts/build_native_ohos.sh via entry/hvigorfile.ts before
+ * packaging entry/libs/arm64-v8a/libadb_core.so (gitignored).
  *
  *   import adbCore from 'libadb_core.so';
  *   const ver = adbCore.nativeVersion();
- *   const echoed = adbCore.roundTripBytes(bytes);
  */
 
 export interface AdbCoreNative {

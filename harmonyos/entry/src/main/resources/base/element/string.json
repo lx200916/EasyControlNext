@@ -150,6 +150,10 @@
       "value": "设备名称"
     },
     {
+      "name": "editor_field_name_placeholder",
+      "value": "留空则首次探测后自动填写"
+    },
+    {
       "name": "editor_field_host",
       "value": "主机地址"
     },
@@ -163,7 +167,7 @@
     },
     {
       "name": "editor_basic_hint",
-      "value": "填写主机与 ADB/Server 端口；首次无线调试请到「配对」分区输入配对端口与配对码。"
+      "value": "名称可留空（首次探测后自动填写）。填写主机与 ADB/Server 端口；首次无线调试请到「配对」分区输入配对端口与配对码。"
     },
     {
       "name": "editor_field_connect_on_start",
@@ -432,7 +436,15 @@
     },
     {
       "name": "settings_connection_hint",
-      "value": "使用内置预设快速调整画质与帧率，可应用到已保存设备。"
+      "value": "管理普通远程、摄像头监控、单应用等镜像配置。点卡片编辑，也可复制或设为默认。"
+    },
+    {
+      "name": "settings_probe_timeout",
+      "value": "连接探测超时"
+    },
+    {
+      "name": "settings_probe_timeout_hint",
+      "value": "连接前先探测 IP 和 ADB 端口。局域网或热点建议 500 ms；慢速网络可加大。"
     },
     {
       "name": "settings_session_back_remote",
@@ -443,12 +455,24 @@
       "value": "开启后，控制页按系统返回会注入远端返回键；关闭则退出控制页"
     },
     {
+      "name": "settings_decode_caps",
+      "value": "本机解码能力测试"
+    },
+    {
+      "name": "settings_decode_caps_hint",
+      "value": "检测本机 H.264 / H.265 / Opus / AAC 硬件解码（与会话相同路径）"
+    },
+    {
+      "name": "settings_decode_caps_run",
+      "value": "测试"
+    },
+    {
       "name": "presets_title",
       "value": "连接预设"
     },
     {
       "name": "presets_subtitle",
-      "value": "内置模板 · 应用到已保存设备"
+      "value": "屏幕 / 相机 / 单应用投屏配置模板"
     },
     {
       "name": "presets_apply_to_device",
@@ -456,7 +480,87 @@
     },
     {
       "name": "presets_lite_note",
-      "value": "内置三项预设。「应用预设」仅影响本次会话，不会修改已保存设备。"
+      "value": "默认预设会填充并关联新建设备。在设备页「应用预设」会写入并关联；管理页「应用预设」仅本次连接。"
+    },
+    {
+      "name": "preset_create",
+      "value": "新建预设"
+    },
+    {
+      "name": "preset_edit",
+      "value": "编辑预设"
+    },
+    {
+      "name": "preset_name",
+      "value": "预设名称"
+    },
+    {
+      "name": "preset_stream_section",
+      "value": "画面与会话选项"
+    },
+    {
+      "name": "preset_default_hint",
+      "value": "默认预设会填充并关联新建设备。在设备页「应用预设」会写入并关联；管理页「应用预设」仅本次连接。修改预设时会询问是否更新已关联设备。"
+    },
+    {
+      "name": "preset_set_default",
+      "value": "设为默认"
+    },
+    {
+      "name": "preset_duplicate",
+      "value": "复制"
+    },
+    {
+      "name": "preset_delete",
+      "value": "删除"
+    },
+    {
+      "name": "preset_reset",
+      "value": "恢复默认"
+    },
+    {
+      "name": "preset_builtin_edit_hint",
+      "value": "内置预设可编辑；在列表中点「恢复默认」可还原出厂值。"
+    },
+    {
+      "name": "preset_apply_section",
+      "value": "应用预设"
+    },
+    {
+      "name": "preset_apply_device_hint",
+      "value": "将选项复制到本设备并关联该预设。手动改动画面相关选项会解除关联（设备保留你改过的值）。需点保存才会写入。"
+    },
+    {
+      "name": "preset_apply",
+      "value": "应用预设"
+    },
+    {
+      "name": "preset_picker_hint",
+      "value": "选择要应用的预设"
+    },
+    {
+      "name": "preset_detach",
+      "value": "解除预设关联"
+    },
+    {
+      "name": "preset_video_source_detail",
+      "value": "屏幕镜像，或远程相机（需 Android 12+）"
+    },
+    {
+      "name": "preset_camera_facing_detail",
+      "value": "视频源为相机时的默认前后置"
+    },
+    {
+      "name": "preset_start_app_hint",
+      "value": "可留空作为模板；在设备页或管理里再选包名"
+    },
+    {
+      "name": "preset_virtual_width",
+      "value": "宽（0=默认）"
+    },
+    {
+      "name": "preset_virtual_height",
+      "value": "高（0=默认）"
     },
     {
       "name": "settings_error_logs",
@@ -652,7 +756,7 @@
     },
     {
       "name": "session_hover_dock_hint",
-      "value": "悬停模式 · 控制与键盘"
+      "value": "悬停模式 · 左侧键盘与控制"
     },
     {
       "name": "session_action_launch_app",
@@ -677,6 +781,22 @@
     {
       "name": "session_keyboard_cjk_note",
       "value": "英文键盘"
+    },
+    {
+      "name": "form_display_name",
+      "value": "设备列表"
+    },
+    {
+      "name": "form_desc",
+      "value": "查看已保存的 Android 设备，点按即可连接"
+    },
+    {
+      "name": "form_empty_hint",
+      "value": "还没有设备，点此打开易控"
+    },
+    {
+      "name": "form_tap_connect",
+      "value": "点按连接"
     }
   ]
 }

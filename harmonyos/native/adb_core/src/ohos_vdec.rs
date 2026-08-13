@@ -7,7 +7,7 @@
 use std::collections::VecDeque;
 use std::ffi::c_void;
 use std::os::raw::c_char;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -72,6 +72,11 @@ extern "C" {
   fn OH_VideoDecoder_Stop(codec: *mut OH_AVCodec) -> i32;
   fn OH_VideoDecoder_PushInputBuffer(codec: *mut OH_AVCodec, index: u32) -> i32;
   fn OH_VideoDecoder_RenderOutputBuffer(codec: *mut OH_AVCodec, index: u32) -> i32;
+  fn OH_VideoDecoder_RenderOutputBufferAtTime(
+    codec: *mut OH_AVCodec,
+    index: u32,
+    render_timestamp_ns: i64,
+  ) -> i32;
   fn OH_VideoDecoder_FreeOutputBuffer(codec: *mut OH_AVCodec, index: u32) -> i32;
 }
 
@@ -127,6 +132,9 @@ struct DecoderState {
   use_h265: bool,
   surface_id: u64,
   live: bool,
+  /// Monotonic PTS fallback when the server sends 0 / duplicates (real-device OH codecs
+  /// often stall on a frozen first frame if every live AU is submitted with pts=0).
+  next_pts_us: i64,
 }
 
 unsafe impl Send for DecoderState {}
@@ -144,6 +152,42 @@ static STREAM_CHANGED: AtomicU32 = AtomicU32::new(0);
 static LAST_ERROR: AtomicI32 = AtomicI32::new(0);
 static DROPPED_AUS: AtomicU32 = AtomicU32::new(0);
 static LAST_DETAIL: Mutex<String> = Mutex::new(String::new());
+/// Last surface render timestamp (CLOCK_MONOTONIC ns). Must strictly increase.
+static LAST_RENDER_NS: AtomicI64 = AtomicI64::new(0);
+
+#[repr(C)]
+struct Timespec {
+  tv_sec: i64,
+  tv_nsec: i64,
+}
+
+const CLOCK_MONOTONIC: i32 = 1;
+
+extern "C" {
+  fn clock_gettime(clk_id: i32, tp: *mut Timespec) -> i32;
+}
+
+/// `OH_VideoDecoder_RenderOutputBufferAtTime` wants ns close to SystemNanoTime
+/// (`CLOCK_MONOTONIC`, must be > 0). Encoder PTS is microseconds — do not pass it here.
+fn monotonic_ns() -> i64 {
+  let mut ts = Timespec { tv_sec: 0, tv_nsec: 0 };
+  let rc = unsafe { clock_gettime(CLOCK_MONOTONIC, &mut ts) };
+  if rc != 0 {
+    return 1;
+  }
+  ts.tv_sec
+    .saturating_mul(1_000_000_000)
+    .saturating_add(ts.tv_nsec)
+    .max(1)
+}
+
+fn next_render_timestamp_ns() -> i64 {
+  let now = monotonic_ns();
+  let prev = LAST_RENDER_NS.load(Ordering::Relaxed);
+  let ts = if now > prev { now } else { prev.saturating_add(1) };
+  LAST_RENDER_NS.store(ts, Ordering::Relaxed);
+  ts
+}
 
 fn feed_allowed() -> bool {
   STARTED.load(Ordering::SeqCst)
@@ -194,7 +238,19 @@ fn take_submit_jobs(state: &mut DecoderState) -> Vec<SubmitJob> {
   while !state.free_inputs.is_empty() && !state.pending.is_empty() {
     let free = state.free_inputs.pop_front().unwrap();
     let packet = state.pending.pop_front().unwrap();
-    let pts_us = if state.live { 0 } else { packet.pts_us };
+    // Match Android VideoDecode.decodeIn: use stream PTS. For live, ensure strictly
+    // increasing timestamps so OH_VideoDecoder keeps rendering (pts=0-for-all freezes).
+    let pts_us = if (packet.flags & FLAG_CODEC_DATA) != 0 {
+      0
+    } else if packet.pts_us > state.next_pts_us {
+      state.next_pts_us = packet.pts_us;
+      packet.pts_us
+    } else {
+      // ~60 fps when the encoder repeats 0 / duplicate PTS. 1ms steps make some
+      // OH codecs think the stream already ended and freeze on the first picture.
+      state.next_pts_us = state.next_pts_us.saturating_add(16_667);
+      state.next_pts_us
+    };
     jobs.push(SubmitJob {
       codec: state.codec,
       index: free.index,
@@ -355,12 +411,19 @@ extern "C" fn on_new_output(
     let _ = unsafe { OH_VideoDecoder_FreeOutputBuffer(codec, index) };
     return;
   }
-  // Render ASAP (no AtTime scheduling). Matches low-latency mirror intent.
-  let rc = unsafe { OH_VideoDecoder_RenderOutputBuffer(codec, index) };
+  // Stamp NativeWindow with CLOCK_MONOTONIC *now* (ns). Official AtTime notes:
+  // timestamp must be reasonably close to SystemNanoTime; same-VSYNC extras drop
+  // (last wins). Bare RenderOutputBuffer lets some devices treat decoder PTS (µs)
+  // as Surface ns — first picture shows, later buffers look “too old” and never swap.
+  let ts = next_render_timestamp_ns();
+  let mut rc = unsafe { OH_VideoDecoder_RenderOutputBufferAtTime(codec, index, ts) };
+  if rc != AV_ERR_OK {
+    rc = unsafe { OH_VideoDecoder_RenderOutputBuffer(codec, index) };
+  }
   if rc != AV_ERR_OK {
     let _ = unsafe { OH_VideoDecoder_FreeOutputBuffer(codec, index) };
     LAST_ERROR.store(rc, Ordering::SeqCst);
-    set_detail(format!("render failed rc={rc}"));
+    set_detail(format!("render failed rc={rc} ts={ts}"));
     return;
   }
   let n = OUTPUT_FRAMES.fetch_add(1, Ordering::SeqCst) + 1;
@@ -368,6 +431,8 @@ extern "C" fn on_new_output(
   if !FIRST_FRAME.load(Ordering::SeqCst) {
     FIRST_FRAME.store(true, Ordering::SeqCst);
     set_detail(format!("firstFrameRendered out={n}"));
+  } else if n == 2 || n % 30 == 0 {
+    set_detail(format!("rendered out={n}"));
   }
 }
 
@@ -379,6 +444,7 @@ fn reset_counters() {
   STREAM_CHANGED.store(0, Ordering::SeqCst);
   LAST_ERROR.store(0, Ordering::SeqCst);
   DROPPED_AUS.store(0, Ordering::SeqCst);
+  LAST_RENDER_NS.store(0, Ordering::SeqCst);
   set_detail("idle");
 }
 
@@ -426,11 +492,18 @@ fn au_flags(payload: &[u8]) -> u32 {
   } else {
     0
   };
-  if nal_off < payload.len() {
-    let nal_type = payload[nal_off] & 0x1f;
-    if nal_type == 5 {
-      flags |= FLAG_SYNC;
-    }
+  if nal_off >= payload.len() {
+    return flags;
+  }
+  // AVC: nal_unit_type in low 5 bits — IDR = 5.
+  let avc_type = payload[nal_off] & 0x1f;
+  if avc_type == 5 {
+    flags |= FLAG_SYNC;
+  }
+  // HEVC: nal_unit_type = (byte >> 1) & 0x3F — IDR_W_RADL=19, IDR_N_LP=20, CRA=21.
+  let hevc_type = (payload[nal_off] >> 1) & 0x3f;
+  if hevc_type == 19 || hevc_type == 20 || hevc_type == 21 {
+    flags |= FLAG_SYNC;
   }
   flags
 }
@@ -551,6 +624,7 @@ fn start_decoder_inner(
       use_h265,
       surface_id,
       live,
+      next_pts_us: 0,
     });
   }
 
@@ -975,4 +1049,19 @@ pub fn snapshot() -> StatusSnapshot {
     surface_id,
     detail,
   }
+}
+
+/// Create+destroy only — does not touch the live decoder STATE.
+/// Must run on the JS/NAPI thread (same as session attach).
+pub fn probe_create(use_h265: bool) -> Result<(), String> {
+  let mime = mime_for(use_h265);
+  let mime_label = if use_h265 { "video/hevc" } else { "video/avc" };
+  let codec = unsafe { OH_VideoDecoder_CreateByMime(mime.as_ptr() as *const c_char) };
+  if codec.is_null() {
+    return Err(format!("CreateByMime null ({mime_label})"));
+  }
+  unsafe {
+    OH_VideoDecoder_Destroy(codec);
+  }
+  Ok(())
 }

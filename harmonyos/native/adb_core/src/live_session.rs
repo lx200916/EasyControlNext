@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 use easycontrol_adb_client::{
   connect_dual, connect_tcp, ensure_server_jar, read_adb_at_least, read_exact_timeout,
   read_video_header_adb, read_video_header_tcp_with_leftover, start_server_shell,
-  stop_existing_server, AdbSession, ConnectMode, RsaAdbSigner, ServerLaunchOptions, SessionState,
-  DEFAULT_APP_VERSION_CODE,
+  stop_existing_server, AdbSession, ConnectMode, RsaAdbSigner, ServerLaunchOptions, SessionIo,
+  SessionState, DEFAULT_APP_VERSION_CODE,
 };
 use easycontrol_protocol::control;
 use easycontrol_protocol::video::{self, VideoStreamHeader};
@@ -194,7 +194,18 @@ fn load_signer(req: &LiveStartRequest) -> Result<Arc<RsaAdbSigner>, String> {
 }
 
 /// Parse `ro.build.version.sdk` — first integer token, or -1 if unknown.
-fn read_device_sdk(session: &mut AdbSession<std::net::TcpStream>) -> i32 {
+fn format_adb_handshake_error(e: &easycontrol_adb_client::AdbError) -> String {
+  let msg = e.to_string();
+  if msg.contains("STLS") || msg.contains("0x534c5453") || msg.contains("adb tls") {
+    format!(
+      "ADB 无线 TLS 连接失败: {msg}（请先完成无线配对，并使用「连接端口」而非配对端口）"
+    )
+  } else {
+    format!("ADB AUTH/CNXN failed: {msg} (authorize RSA key on Android if prompted)")
+  }
+}
+
+fn read_device_sdk(session: &mut AdbSession<SessionIo>) -> i32 {
   let out = match session.shell("getprop ro.build.version.sdk") {
     Ok(bytes) => String::from_utf8_lossy(&bytes).trim().to_string(),
     Err(_) => return -1,
@@ -215,7 +226,7 @@ fn read_device_sdk(session: &mut AdbSession<std::net::TcpStream>) -> i32 {
 
 /// Mirror Android ClientStream.startServer camera / virtual-display API gates.
 fn enforce_source_sdk_gates(
-  session: &mut AdbSession<std::net::TcpStream>,
+  session: &mut AdbSession<SessionIo>,
   opts: &ServerLaunchOptions,
 ) -> Result<(), String> {
   if opts.video_source.eq_ignore_ascii_case("camera") {
@@ -575,9 +586,15 @@ fn run_session(shared: Arc<Shared>, req: LiveStartRequest) -> Result<(), String>
   let stream = connect_tcp(&req.host, req.adb_port, Duration::from_secs(8))
     .map_err(|e| format!("ADB TCP connect failed: {e}"))?;
   // Already-authorized devices finish AUTH quickly; 25s still covers first-time prompts.
-  let mut session = AdbSession::connect(stream, signer.as_ref(), Duration::from_secs(25)).map_err(|e| {
-    format!("ADB AUTH/CNXN failed: {e} (authorize RSA key on Android if prompted)")
-  })?;
+  // Wireless `_adb-tls-connect._tcp` replies A_STLS — upgrade via pairing RSA cert (AOSP).
+  let mut session = AdbSession::connect_with_key(
+    stream,
+    signer.as_ref(),
+    &req.private_key_pem,
+    &req.host,
+    Duration::from_secs(25),
+  )
+  .map_err(|e| format_adb_handshake_error(&e))?;
   if session.state() != SessionState::Connected {
     return Err("ADB session not connected".into());
   }
@@ -652,23 +669,34 @@ fn run_session(shared: Arc<Shared>, req: LiveStartRequest) -> Result<(), String>
     read_video_header_adb(&mut session, id, header_timeout)?
   };
 
-  let can_audio_byte = if let Some(ref mut sock) = main_tcp {
-    read_exact_timeout(sock, 1, header_timeout)?[0]
+  // Main preamble: can_audio:u8 [, use_opus:u8]. AdbTcp may deliver both in one WRTE —
+  // must keep leftover bytes for demux (do not discard after taking [0]).
+  let mut main_leftover: Vec<u8> = Vec::new();
+  let (can_audio, use_opus) = if let Some(ref mut sock) = main_tcp {
+    let can_audio_byte = read_exact_timeout(sock, 1, header_timeout)?[0];
+    let can_audio = can_audio_byte == 1;
+    let use_opus = if can_audio {
+      read_exact_timeout(sock, 1, header_timeout)?[0] == 1
+    } else {
+      false
+    };
+    (can_audio, use_opus)
   } else {
     let id = main_adb.ok_or("missing main adb stream")?;
-    read_adb_at_least(&mut session, id, 1, header_timeout)?[0]
-  };
-  let can_audio = can_audio_byte == 1;
-  let use_opus = if can_audio {
-    let opus_byte = if let Some(ref mut sock) = main_tcp {
-      read_exact_timeout(sock, 1, header_timeout)?[0]
+    let mut preamble = read_adb_at_least(&mut session, id, 1, header_timeout)?;
+    let can_audio_byte = preamble.remove(0);
+    let can_audio = can_audio_byte == 1;
+    let use_opus = if can_audio {
+      if preamble.is_empty() {
+        let more = read_adb_at_least(&mut session, id, 1, header_timeout)?;
+        preamble.extend_from_slice(&more);
+      }
+      preamble.remove(0) == 1
     } else {
-      let id = main_adb.ok_or("missing main adb stream")?;
-      read_adb_at_least(&mut session, id, 1, header_timeout)?[0]
+      false
     };
-    opus_byte == 1
-  } else {
-    false
+    main_leftover = preamble;
+    (can_audio, use_opus)
   };
   eprintln!(
     "[LiveSession] main audio handshake can_audio={} use_opus={} (requested is_audio={})",
@@ -760,6 +788,7 @@ fn run_session(shared: Arc<Shared>, req: LiveStartRequest) -> Result<(), String>
 
   match mode {
     ConnectMode::Direct => {
+      let _ = main_leftover; // only AdbTcp may carry handshake leftovers
       let video = video_tcp.take().ok_or("missing video tcp")?;
       // Keepalive on shared main clone.
       let shared_ka = shared.clone();
@@ -776,6 +805,7 @@ fn run_session(shared: Arc<Shared>, req: LiveStartRequest) -> Result<(), String>
         video_id,
         main_id,
         leftover,
+        main_leftover,
         shell_id,
         can_audio,
         use_opus,
@@ -1022,11 +1052,16 @@ fn feed_main_adb_buf(
 
 fn feed_video_tcp(shared: Arc<Shared>, mut video: TcpStream, mut buf: Vec<u8>) -> Result<(), String> {
   video
-    .set_read_timeout(Some(Duration::from_millis(500)))
+    .set_read_timeout(Some(Duration::from_millis(200)))
     .map_err(|e| e.to_string())?;
+  let _ = video.set_nodelay(true);
   let mut tmp = [0u8; 64 * 1024];
   let mut aus = 0u32;
   let mut cursor = 0usize;
+  eprintln!(
+    "[LiveSession] feed_video_tcp start leftover={}B",
+    buf.len()
+  );
   while !shared.stop.load(Ordering::SeqCst) {
     // Parse complete AUs without O(n) drain per frame (cursor + compact).
     loop {
@@ -1043,9 +1078,12 @@ fn feed_video_tcp(shared: Arc<Shared>, mut video: TcpStream, mut buf: Vec<u8>) -
           }
           cursor += n;
           aus += 1;
-          if aus % 30 == 0 {
+          if aus == 1 || aus % 15 == 0 {
             set_status(&shared, |st| {
               st.aus_fed = aus;
+              if st.phase == LivePhase::Streaming {
+                st.detail = format!("direct live aus={aus}");
+              }
             });
           }
         }
@@ -1092,10 +1130,11 @@ fn feed_video_tcp(shared: Arc<Shared>, mut video: TcpStream, mut buf: Vec<u8>) -
 
 fn feed_video_adb(
   shared: Arc<Shared>,
-  session: &mut AdbSession<std::net::TcpStream>,
+  session: &mut AdbSession<SessionIo>,
   video_id: u32,
   main_id: u32,
   mut buf: Vec<u8>,
+  mut main_buf: Vec<u8>,
   shell_id: u32,
   can_audio: bool,
   use_opus: bool,
@@ -1105,11 +1144,26 @@ fn feed_video_adb(
   let mut last_ka = Instant::now();
   let mut aus = 0u32;
   let mut cursor = 0usize;
-  let mut main_buf: Vec<u8> = Vec::new();
   let mut audio_started = false;
   let mut audio_failed = false;
+  // Process any leftover main bytes from the can_audio/use_opus handshake WRTE.
+  if !main_buf.is_empty() {
+    feed_main_adb_buf(
+      &shared,
+      &mut main_buf,
+      use_opus,
+      &mut audio_started,
+      &mut audio_failed,
+    )?;
+  }
+  // Short idle timeout; fill_exact keeps partial ADB headers across TimedOut (TLS-safe).
+  session
+    .set_io_timeout(Duration::from_millis(80))
+    .map_err(|e| e.to_string())?;
+  eprintln!("[LiveSession] feed_video_adb start (TLS/plain ADB tunnel)");
   while !shared.stop.load(Ordering::SeqCst) {
-    let _ = session.pump();
+    // Drain WRTE bursts so OKAY credits keep adbd sending video.
+    let pumped = session.pump_available(64).map_err(|e| e.to_string())?;
     let chunk = session.read_stream_buf(video_id).map_err(|e| e.to_string())?;
     if !chunk.is_empty() {
       buf.extend_from_slice(&chunk);
@@ -1160,12 +1214,15 @@ fn feed_video_adb(
       });
       return Ok(());
     }
-    if chunk.is_empty() && main_chunk.is_empty() {
-      thread::sleep(Duration::from_millis(5));
+    if chunk.is_empty() && main_chunk.is_empty() && pumped == 0 {
+      thread::sleep(Duration::from_millis(2));
     }
-    if aus > 0 && aus % 30 == 0 {
+    if aus > 0 && (aus == 1 || aus % 15 == 0) {
       set_status(&shared, |st| {
         st.aus_fed = aus;
+        if st.phase == LivePhase::Streaming {
+          st.detail = format!("adb-tcp live aus={aus}");
+        }
       });
     }
   }

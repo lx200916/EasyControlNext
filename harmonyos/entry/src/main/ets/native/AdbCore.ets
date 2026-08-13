@@ -7,17 +7,10 @@ import adbCore from 'libadb_core.so';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { buildSyntheticAvcFixture } from '../media/FixtureBitstream';
 import { parseAccessUnitStream, parseVideoStreamHeader } from '../media/VideoFraming';
+import { GateBProbeResult } from './AdbCoreTypes';
 
 const DOMAIN: number = 0x0001;
 const TAG: string = 'GateB';
-
-export interface GateBProbeResult {
-  ok: boolean;
-  version: string;
-  capabilities: string;
-  roundTripOk: boolean;
-  detail: string;
-}
 
 export function runGateBProbe(): GateBProbeResult {
   try {

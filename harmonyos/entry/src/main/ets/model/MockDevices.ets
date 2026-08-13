@@ -1,28 +1,27 @@
 /**
- * Seed devices when DevicesDb is empty on first launch (then persisted).
+ * Device list helpers (lookup / endpoint formatting).
+ * Historical mock seeds (`mock-pixel` / `mock-lab`) are never written on init;
+ * strip them if still present from older builds or legacy RDB migrate.
  */
 
 import { Device } from './Device';
 
-export function createMockDevices(): Device[] {
-  const demo = new Device('mock-pixel');
-  demo.name = 'Pixel Demo';
-  demo.address = '192.168.31.60';
-  demo.adbPort = 5555;
-  demo.serverPort = 25166;
-  demo.maxSize = 1600;
-  demo.maxFps = 60;
-  demo.useH265 = false;
+/** UUIDs written by early `createMockDevices()` seed — remove on load, never re-create. */
+export const LEGACY_MOCK_UUIDS: string[] = ['mock-pixel', 'mock-lab'];
 
-  const lab = new Device('mock-lab');
-  lab.name = 'Lab Tablet';
-  lab.address = '10.0.0.42';
-  lab.adbPort = 5555;
-  lab.serverPort = 25166;
-  lab.useH265 = false;
-  lab.isAudio = false;
+export function isLegacyMockUuid(uuid: string): boolean {
+  return uuid === 'mock-pixel' || uuid === 'mock-lab';
+}
 
-  return [demo, lab];
+/** Drop known demo seed rows; preserves any real user devices. */
+export function stripLegacyMockDevices(devices: Device[]): Device[] {
+  const out: Device[] = [];
+  for (let i = 0; i < devices.length; i++) {
+    if (!isLegacyMockUuid(devices[i].uuid)) {
+      out.push(devices[i]);
+    }
+  }
+  return out;
 }
 
 export function findDeviceByUuid(devices: Device[], uuid: string): Device | undefined {

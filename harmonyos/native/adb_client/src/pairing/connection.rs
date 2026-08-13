@@ -2,17 +2,13 @@
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::sync::Arc;
 use std::time::Duration;
 
-use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair};
-use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName, UnixTime};
-use rustls::{ClientConfig, ClientConnection, DigitallySignedStruct, Error as TlsError, SignatureScheme,
-             StreamOwned};
+use rustls::{ClientConnection, StreamOwned};
 use zeroize::Zeroize;
 
 use crate::signer::{AdbSigner, RsaAdbSigner};
+use crate::tls_client::{build_tls_client_config, make_client_cert};
 
 use super::auth::PairingAuthCtx;
 use super::framing::{
@@ -68,14 +64,16 @@ pub fn pair_wireless(
     .public_key_payload()
     .map_err(|e| PairingError::Crypto(e.to_string()))?;
 
-  let (cert_der, key_der) = make_client_cert(private_key_pem)?;
+  let (cert_der, key_der) =
+    make_client_cert(private_key_pem).map_err(|e| PairingError::Crypto(e.to_string()))?;
   let sock = TcpStream::connect((host.trim(), pair_port))?;
   sock.set_read_timeout(Some(timeout))?;
   sock.set_write_timeout(Some(timeout))?;
   sock.set_nodelay(true)?;
 
-  let config = build_tls_config(cert_der, key_der)?;
-  let server_name = ServerName::try_from(host.trim().to_string())
+  let config =
+    build_tls_client_config(cert_der, key_der).map_err(|e| PairingError::Tls(e.to_string()))?;
+  let server_name = rustls::pki_types::ServerName::try_from(host.trim().to_string())
     .map_err(|_| PairingError::InvalidInput("invalid TLS server name"))?;
   let conn = ClientConnection::new(config, server_name)
     .map_err(|e| PairingError::Tls(e.to_string()))?;
@@ -140,35 +138,6 @@ pub fn pair_wireless(
   })
 }
 
-fn make_client_cert(private_key_pem: &str) -> PairingResult<(Vec<u8>, Vec<u8>)> {
-  let key_pair = KeyPair::from_pem(private_key_pem)
-    .map_err(|e| PairingError::Crypto(format!("rcgen KeyPair: {e}")))?;
-  let mut params = CertificateParams::new(vec!["Easy Control Next".into()])
-    .map_err(|e| PairingError::Crypto(format!("cert params: {e}")))?;
-  let mut dn = DistinguishedName::new();
-  dn.push(DnType::CommonName, "Easy Control Next");
-  params.distinguished_name = dn;
-  let cert = params
-    .self_signed(&key_pair)
-    .map_err(|e| PairingError::Crypto(format!("self_signed: {e}")))?;
-  Ok((cert.der().as_ref().to_vec(), key_pair.serialize_der()))
-}
-
-fn build_tls_config(
-  cert_der: Vec<u8>,
-  key_der: Vec<u8>,
-) -> PairingResult<Arc<ClientConfig>> {
-  let _ = rustls::crypto::ring::default_provider().install_default();
-  let certs = vec![CertificateDer::from(cert_der)];
-  let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(key_der));
-  let config = ClientConfig::builder()
-    .dangerous()
-    .with_custom_certificate_verifier(Arc::new(NoCertificateVerification))
-    .with_client_auth_cert(certs, key)
-    .map_err(|e| PairingError::Tls(format!("client auth cert: {e}")))?;
-  Ok(Arc::new(config))
-}
-
 fn write_packet<S: Read + Write>(
   tls: &mut StreamOwned<ClientConnection, S>,
   typ: u8,
@@ -192,44 +161,4 @@ fn read_packet<S: Read + Write>(
   let mut payload = vec![0u8; header.payload_size as usize];
   tls.read_exact(&mut payload)?;
   Ok((header, payload))
-}
-
-#[derive(Debug)]
-struct NoCertificateVerification;
-
-impl ServerCertVerifier for NoCertificateVerification {
-  fn verify_server_cert(
-    &self,
-    _end_entity: &CertificateDer<'_>,
-    _intermediates: &[CertificateDer<'_>],
-    _server_name: &ServerName<'_>,
-    _ocsp_response: &[u8],
-    _now: UnixTime,
-  ) -> Result<ServerCertVerified, TlsError> {
-    Ok(ServerCertVerified::assertion())
-  }
-
-  fn verify_tls12_signature(
-    &self,
-    _message: &[u8],
-    _cert: &CertificateDer<'_>,
-    _dss: &DigitallySignedStruct,
-  ) -> Result<HandshakeSignatureValid, TlsError> {
-    Ok(HandshakeSignatureValid::assertion())
-  }
-
-  fn verify_tls13_signature(
-    &self,
-    _message: &[u8],
-    _cert: &CertificateDer<'_>,
-    _dss: &DigitallySignedStruct,
-  ) -> Result<HandshakeSignatureValid, TlsError> {
-    Ok(HandshakeSignatureValid::assertion())
-  }
-
-  fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-    rustls::crypto::ring::default_provider()
-      .signature_verification_algorithms
-      .supported_schemes()
-  }
 }

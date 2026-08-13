@@ -1,18 +1,20 @@
-//! Unified ADB session: CNXN/AUTH handshake + OPEN/OKAY/WRTE/CLSE multiplexer.
+//! Unified ADB session: CNXN/AUTH handshake (+ optional A_STLS/TLS) + OPEN/OKAY/WRTE/CLSE multiplexer.
 
 use std::collections::{HashMap, VecDeque};
+use std::net::TcpStream;
 use std::time::Duration;
 
 use easycontrol_protocol::adb::{
   self, AdbMessage, AUTH_TYPE_RSA_PUBLIC, AUTH_TYPE_SIGNATURE, CMD_AUTH, CMD_CLSE, CMD_CNXN,
-  CMD_OKAY, CMD_OPEN, CMD_WRTE, ADB_HEADER_LENGTH,
+  CMD_OKAY, CMD_OPEN, CMD_STLS, CMD_WRTE, ADB_HEADER_LENGTH,
 };
 
 use crate::error::{AdbError, AdbResult};
 use crate::signer::AdbSigner;
 use crate::sync_pull::{build_quit, build_recv_request, PullStreamParser, SyncPullResult};
 use crate::sync_push::{build_sync_push, SyncPushPlan};
-use crate::transport::AdbTransport;
+use crate::tls_client::upgrade_tcp_to_tls;
+use crate::transport::{AdbTransport, SessionIo};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionState {
@@ -38,16 +40,143 @@ pub struct AdbSession<T: AdbTransport> {
   streams: HashMap<u32, StreamState>,
   /// Pending OPEN local_ids waiting for first OKAY.
   pending_open: HashMap<u32, ()>,
+  /// Bytes already pulled from the socket but not yet consumed by a message parse.
+  /// Critical with short read timeouts / TLS: `read_exact` timeout must not drop
+  /// a partial ADB header or the stream desyncs and video freezes after first AUs.
+  rx_stash: Vec<u8>,
+}
+
+impl AdbSession<SessionIo> {
+  /// Production connect: handles classic AUTH and wireless A_STLS → TLS 1.3 → CNXN.
+  ///
+  /// AOSP wireless (`_adb-tls-connect._tcp`): client CNXN → server STLS → client STLS →
+  /// TLS handshake (client cert = pairing key) → server CNXN over TLS (no RSA AUTH).
+  pub fn connect_with_key(
+    stream: TcpStream,
+    signer: &dyn AdbSigner,
+    private_key_pem: &str,
+    server_name: &str,
+    io_timeout: Duration,
+  ) -> AdbResult<Self> {
+    let mut transport = SessionIo::Plain(stream);
+    transport.set_read_timeout(Some(io_timeout))?;
+    transport.set_write_timeout(Some(io_timeout))?;
+    transport.write_all(&adb::generate_connect())?;
+
+    let mut msg = Self::read_message_raw(&mut transport, true)?;
+
+    if msg.header.command == CMD_STLS {
+      if private_key_pem.trim().is_empty() {
+        let _ = transport.close();
+        return Err(AdbError::Tls(
+          "device requires A_STLS (wireless TLS ADB); missing private key PEM".into(),
+        ));
+      }
+      transport.write_all(&adb::generate_stls())?;
+      let sock = match transport {
+        SessionIo::Plain(s) => s,
+        SessionIo::Tls(_) => {
+          return Err(AdbError::InvalidState("expected plaintext before STLS upgrade"));
+        }
+      };
+      let tls = upgrade_tcp_to_tls(sock, private_key_pem, server_name).map_err(|e| {
+        AdbError::Tls(format!(
+          "{e} (pair wireless debugging first; use _adb-tls-connect port, not pairing port)"
+        ))
+      })?;
+      transport = SessionIo::Tls(Box::new(tls));
+      transport.set_read_timeout(Some(io_timeout))?;
+      transport.set_write_timeout(Some(io_timeout))?;
+      // AOSP: after TLS success the server speaks first with CNXN (cert replaces AUTH).
+      msg = Self::read_message_raw(&mut transport, true)?;
+      // Some stacks may still challenge; handle AUTH over TLS like classic path.
+      if msg.header.command == CMD_AUTH {
+        msg = Self::complete_auth(&mut transport, signer, msg)?;
+      }
+      if msg.header.command != CMD_CNXN {
+        let got = msg.header.command;
+        let _ = transport.close();
+        return Err(AdbError::UnexpectedCommand {
+          expected: "CNXN (after STLS/TLS)",
+          got,
+        });
+      }
+      return Ok(Self::from_cnxn(transport, msg));
+    }
+
+    if msg.header.command == CMD_AUTH {
+      msg = Self::complete_auth(&mut transport, signer, msg)?;
+    }
+
+    if msg.header.command != CMD_CNXN {
+      let got = msg.header.command;
+      let _ = transport.close();
+      if got == CMD_STLS {
+        return Err(AdbError::Tls(
+          "unexpected STLS after AUTH path".into(),
+        ));
+      }
+      return Err(AdbError::UnexpectedCommand {
+        expected: "CNXN",
+        got,
+      });
+    }
+
+    Ok(Self::from_cnxn(transport, msg))
+  }
+
+  fn from_cnxn(transport: SessionIo, msg: AdbMessage) -> Self {
+    Self {
+      transport,
+      state: SessionState::Connected,
+      max_data: if msg.header.arg1 == 0 {
+        adb::CONNECT_MAXDATA
+      } else {
+        msg.header.arg1
+      },
+      next_local_id: 1,
+      streams: HashMap::new(),
+      pending_open: HashMap::new(),
+      rx_stash: Vec::new(),
+    }
+  }
+
+  fn complete_auth(
+    transport: &mut SessionIo,
+    signer: &dyn AdbSigner,
+    mut msg: AdbMessage,
+  ) -> AdbResult<AdbMessage> {
+    if msg.header.arg0 != adb::AUTH_TYPE_TOKEN {
+      return Err(AdbError::AuthFailed("expected AUTH token"));
+    }
+    let sig = signer.sign_token(&msg.payload)?;
+    transport.write_all(&adb::generate_auth(AUTH_TYPE_SIGNATURE, &sig))?;
+    msg = Self::read_message_raw(transport, true)?;
+    if msg.header.command == CMD_AUTH {
+      let pub_key = signer.public_key_payload()?;
+      transport.write_all(&adb::generate_auth(AUTH_TYPE_RSA_PUBLIC, &pub_key))?;
+      msg = Self::read_message_raw(transport, true)?;
+    }
+    Ok(msg)
+  }
 }
 
 impl<T: AdbTransport> AdbSession<T> {
-  /// Perform CNXN + AUTH (authorized-device path) and return a live session.
+  /// Perform CNXN + AUTH (authorized-device / FakeDaemon path) and return a live session.
+  /// For wireless `_adb-tls-connect._tcp` (A_STLS), use [`Self::connect_with_key`] instead.
   pub fn connect(mut transport: T, signer: &dyn AdbSigner, io_timeout: Duration) -> AdbResult<Self> {
     transport.set_read_timeout(Some(io_timeout))?;
     transport.set_write_timeout(Some(io_timeout))?;
     transport.write_all(&adb::generate_connect())?;
 
     let mut msg = Self::read_message_raw(&mut transport, true)?;
+    if msg.header.command == CMD_STLS {
+      let _ = transport.close();
+      return Err(AdbError::Tls(
+        "got A_STLS (0x534c5453): wireless TLS ADB requires connect_with_key / pairing RSA cert"
+          .into(),
+      ));
+    }
     if msg.header.command == CMD_AUTH {
       if msg.header.arg0 != adb::AUTH_TYPE_TOKEN {
         return Err(AdbError::AuthFailed("expected AUTH token"));
@@ -81,6 +210,7 @@ impl<T: AdbTransport> AdbSession<T> {
       next_local_id: 1,
       streams: HashMap::new(),
       pending_open: HashMap::new(),
+      rx_stash: Vec::new(),
     })
   }
 
@@ -342,7 +472,7 @@ impl<T: AdbTransport> AdbSession<T> {
   /// Read and dispatch one message (blocking until timeout on transport).
   pub fn pump(&mut self) -> AdbResult<()> {
     self.ensure_connected()?;
-    let msg = match Self::read_message_raw(&mut self.transport, true) {
+    let msg = match self.read_message(true) {
       Ok(m) => m,
       Err(AdbError::Timeout) => return Ok(()),
       Err(AdbError::Io(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
@@ -352,6 +482,28 @@ impl<T: AdbTransport> AdbSession<T> {
       Err(e) => return Err(e),
     };
     self.dispatch(msg)
+  }
+
+  /// Drain up to `max` queued ADB messages (WRTE/OKAY/CLSE). Returns how many were handled.
+  /// Used by AdbTcp video feed so TLS bursts of video WRTE get OKAY'd promptly.
+  pub fn pump_available(&mut self, max: usize) -> AdbResult<usize> {
+    self.ensure_connected()?;
+    let mut n = 0usize;
+    while n < max {
+      match self.read_message(true) {
+        Ok(msg) => {
+          self.dispatch(msg)?;
+          n += 1;
+        }
+        Err(AdbError::Timeout) => break,
+        Err(AdbError::Io(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+          self.state = SessionState::Closed;
+          return Err(AdbError::Io(e));
+        }
+        Err(e) => return Err(e),
+      }
+    }
+    Ok(n)
   }
 
   fn dispatch(&mut self, msg: AdbMessage) -> AdbResult<()> {
@@ -406,6 +558,65 @@ impl<T: AdbTransport> AdbSession<T> {
     }
   }
 
+  /// Fill `buf` completely, surviving read timeouts after a partial fill (stash-safe).
+  fn fill_exact(&mut self, buf: &mut [u8]) -> AdbResult<()> {
+    let mut filled = 0usize;
+    if !self.rx_stash.is_empty() {
+      let take = self.rx_stash.len().min(buf.len());
+      buf[..take].copy_from_slice(&self.rx_stash[..take]);
+      self.rx_stash.drain(..take);
+      filled = take;
+    }
+    while filled < buf.len() {
+      let mut tmp = [0u8; 16 * 1024];
+      match self.transport.read_some(&mut tmp) {
+        Ok(0) => {
+          return Err(AdbError::Io(std::io::Error::new(
+            std::io::ErrorKind::UnexpectedEof,
+            "adb EOF mid-message",
+          )));
+        }
+        Ok(n) => {
+          let need = buf.len() - filled;
+          let copy = need.min(n);
+          buf[filled..filled + copy].copy_from_slice(&tmp[..copy]);
+          filled += copy;
+          if copy < n {
+            self.rx_stash.extend_from_slice(&tmp[copy..n]);
+          }
+        }
+        Err(AdbError::Timeout) if filled == 0 => return Err(AdbError::Timeout),
+        // Partial message already buffered in `buf` — keep waiting; never drop bytes.
+        Err(AdbError::Timeout) => continue,
+        Err(e) => return Err(e),
+      }
+    }
+    Ok(())
+  }
+
+  fn read_message(&mut self, verify_checksum: bool) -> AdbResult<AdbMessage> {
+    let mut header = [0u8; ADB_HEADER_LENGTH];
+    self.fill_exact(&mut header)?;
+    let hdr = adb::AdbHeader::decode(&header)?;
+    hdr.validate_magic()?;
+    let len = hdr.data_length as usize;
+    if len > adb::ABSOLUTE_MAX_PAYLOAD {
+      return Err(AdbError::PayloadTooLarge {
+        length: len,
+        max: adb::ABSOLUTE_MAX_PAYLOAD,
+      });
+    }
+    let mut payload = vec![0u8; len];
+    if len > 0 {
+      self.fill_exact(&mut payload)?;
+    }
+    let mut full = Vec::with_capacity(ADB_HEADER_LENGTH + len);
+    full.extend_from_slice(&header);
+    full.extend_from_slice(&payload);
+    Ok(adb::decode_message(&full, verify_checksum)?)
+  }
+
+  /// Connect-path helper before `AdbSession` owns the transport (no stash yet).
   fn read_message_raw(transport: &mut T, verify_checksum: bool) -> AdbResult<AdbMessage> {
     let mut header = [0u8; ADB_HEADER_LENGTH];
     transport.read_exact(&mut header)?;

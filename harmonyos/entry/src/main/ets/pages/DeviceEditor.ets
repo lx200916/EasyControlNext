@@ -6,20 +6,29 @@
 import { common } from '@kit.AbilityKit';
 import { ComponentContent } from '@kit.ArkUI';
 import { image } from '@kit.ImageKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import {
   AdbQrCredentials,
   AdbQrPairing,
   encodeQrPixelMap,
+  PairWirelessResult,
+  QrPairStage,
   pairWirelessManual,
   pairWithQrCredentials,
 } from '../adb/AdbPairing';
 import { AppErrorLog } from '../common/AppErrorLog';
-import { CameraFacing, Device, VideoSource } from '../model/Device';
+import { CameraFacing, Device, displayDeviceName, HevcPref, VideoSource } from '../model/Device';
 import { DeviceStore } from '../model/DeviceStore';
+import { ConnectionPreset } from '../model/ConnectionPreset';
+import { PresetStore } from '../model/PresetStore';
+import { probeRemoteSystemPropsLazy, probeTcpReachableLazy } from '../session/LiveMirrorLazy';
+import { RemoteSystemProps } from '../session/RemoteDeviceTypes';
 
 const SECTION_BASIC: string = 'basic';
 const SECTION_PAIRING: string = 'pairing';
 const SECTION_VIDEO: string = 'video';
+/** Live QR dialog status — ComponentContent builders are not @State-reactive. */
+const QR_PAIR_STATUS_KEY: string = 'qr_pair_status';
 
 /** Params for QR pairing custom dialog (module-level builder + ComponentContent). */
 class QrPairDialogParams {
@@ -30,80 +39,110 @@ class QrPairDialogParams {
   };
 }
 
-@Builder
-function qrPairDialogBuilder(params: QrPairDialogParams) {
-  Column({ space: 12 }) {
-    Text($r('app.string.editor_qr_sheet_title'))
-      .fontSize(18)
-      .fontWeight(FontWeight.Medium)
-      .fontColor($r('app.color.ink'))
-      .width('100%')
-    Text($r('app.string.editor_qr_sheet_hint'))
-      .fontSize(13)
-      .fontColor($r('app.color.text_secondary'))
-      .width('100%')
+@Component
+struct QrPairDialogBody {
+  @StorageLink('qr_pair_status') statusText: string = '等待被控机扫描…';
+  @Prop payload: string = '';
+  @Prop encodeFailed: boolean = false;
+  pixelMap: image.PixelMap | undefined = undefined;
+  closeAction: () => void = () => {
+  };
 
-    Column() {
-      if (params.pixelMap !== undefined) {
-        Image(params.pixelMap)
-          .width(220)
-          .height(220)
-          .objectFit(ImageFit.Contain)
-          .backgroundColor(Color.White)
-      } else if (params.payload.length > 0) {
-        QRCode(params.payload)
-          .width(220)
-          .height(220)
-          .backgroundColor(Color.White)
-          .color(Color.Black)
-      } else {
-        LoadingProgress()
-          .width(48)
-          .height(48)
-          .color($r('app.color.accent_blue'))
-      }
-    }
-    .width(236)
-    .height(236)
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
-    .backgroundColor(Color.White)
-    .borderRadius(12)
-    .padding(8)
-
-    if (params.encodeFailed) {
-      Text($r('app.string.editor_qr_payload_fallback'))
-        .fontSize(12)
+  build() {
+    Column({ space: 12 }) {
+      Text($r('app.string.editor_qr_sheet_title'))
+        .fontSize(18)
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.ink'))
+        .width('100%')
+      Text($r('app.string.editor_qr_sheet_hint'))
+        .fontSize(13)
         .fontColor($r('app.color.text_secondary'))
         .width('100%')
-    }
-    Text($r('app.string.editor_qr_waiting'))
-      .fontSize(13)
-      .fontColor($r('app.color.accent_blue'))
+
+      Column() {
+        if (this.pixelMap !== undefined) {
+          Image(this.pixelMap)
+            .width(220)
+            .height(220)
+            .objectFit(ImageFit.Contain)
+            .backgroundColor(Color.White)
+        } else if (this.payload.length > 0) {
+          QRCode(this.payload)
+            .width(220)
+            .height(220)
+            .backgroundColor(Color.White)
+            .color(Color.Black)
+        } else {
+          LoadingProgress()
+            .width(48)
+            .height(48)
+            .color($r('app.color.accent_blue'))
+        }
+      }
+      .width(236)
+      .height(236)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Center)
+      .backgroundColor(Color.White)
+      .borderRadius(12)
+      .padding(8)
+
+      if (this.encodeFailed) {
+        Text($r('app.string.editor_qr_payload_fallback'))
+          .fontSize(12)
+          .fontColor($r('app.color.text_secondary'))
+          .width('100%')
+      }
+
+      Row({ space: 8 }) {
+        LoadingProgress()
+          .width(18)
+          .height(18)
+          .color($r('app.color.accent_blue'))
+          .visibility(this.statusText.indexOf('成功') >= 0 || this.statusText.indexOf('失败') >= 0 ||
+            this.statusText.indexOf('未发现') >= 0
+            ? Visibility.Hidden
+            : Visibility.Visible)
+        Text(this.statusText.length > 0 ? this.statusText : '等待被控机扫描…')
+          .fontSize(13)
+          .fontColor($r('app.color.accent_blue'))
+          .layoutWeight(1)
+      }
       .width('100%')
 
-    Button('关闭')
-      .type(ButtonType.Normal)
-      .width('100%')
-      .height(40)
-      .backgroundColor($r('app.color.surface_muted'))
-      .fontColor($r('app.color.ink'))
-      .onClick(() => {
-        params.closeAction();
-      })
+      Button('关闭')
+        .type(ButtonType.Capsule)
+        .width('100%')
+        .height(40)
+        .backgroundColor($r('app.color.surface_muted'))
+        .fontColor($r('app.color.ink'))
+        .onClick(() => {
+          this.closeAction();
+        })
+    }
+    .width('86%')
+    .constraintSize({ maxWidth: 360 })
+    .padding(20)
+    .backgroundColor($r('app.color.surface_card'))
+    .borderRadius(16)
   }
-  .width('86%')
-  .constraintSize({ maxWidth: 360 })
-  .padding(20)
-  .backgroundColor($r('app.color.surface_card'))
-  .borderRadius(16)
+}
+
+@Builder
+function qrPairDialogBuilder(params: QrPairDialogParams) {
+  QrPairDialogBody({
+    payload: params.payload,
+    pixelMap: params.pixelMap,
+    encodeFailed: params.encodeFailed,
+    closeAction: params.closeAction,
+  })
 }
 
 @Component
 export struct DeviceEditor {
   @Consume('pathStack') pathStack: NavPathStack;
   @Consume('preferSplit') preferSplit: boolean;
-  @Consume('safeTopVp') safeTopVp: number;
   @Consume('safeBottomVp') safeBottomVp: number;
   @Prop uuid: string = 'new';
   /** When true, render inline (sheet / embedded host) without NavDestination / back chrome. */
@@ -137,13 +176,15 @@ export struct DeviceEditor {
   @State private customResolutionOnConnect: boolean = false;
   @State private customResWidthText: string = '1080';
   @State private customResHeightText: string = '2400';
-  @State private lockOnClose: boolean = true;
+  @State private lockOnClose: boolean = false;
   @State private lightOnClose: boolean = false;
   @State private maxSizeText: string = '1600';
   @State private maxFpsText: string = '60';
   @State private maxVideoBitText: string = '4';
   @State private useH265: boolean = false;
   @State private presetId: string = '';
+  @State private showPresetPicker: boolean = false;
+  @State private presetOptions: ConnectionPreset[] = [];
   @State private maxSizeIndex: number = 2;
   @State private maxFpsIndex: number = 1;
   @State private maxVideoBitIndex: number = 1;
@@ -161,22 +202,24 @@ export struct DeviceEditor {
   private readonly videoSourceLabels: string[] = ['屏幕', '摄像头'];
   private readonly cameraFacingLabels: string[] = ['后置', '前置'];
   private editUuid: string = '';
+  private hevcProfile: HevcPref = 'main';
   private qrCreds: AdbQrCredentials | undefined = undefined;
   /** Bumped on dismiss/cancel so in-flight QR pairing ignores late results. */
   private qrSessionId: number = 0;
 
   aboutToAppear(): void {
     this.isNew = this.uuid === 'new' || this.uuid.length === 0;
-    if (this.isNew) {
-      this.resetToDraft();
-      return;
-    }
-    // Wait for RDB init so edit loads persisted row (not a stale empty cache).
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
-    void DeviceStore.init(ctx).then(() => {
-      this.loadExistingOrDraft();
-    }).catch(() => {
-      this.loadExistingOrDraft();
+    void PresetStore.init(ctx).then(() => {
+      if (this.isNew) {
+        this.resetToDraft();
+        return;
+      }
+      void DeviceStore.init(ctx).then(() => {
+        this.loadExistingOrDraft();
+      }).catch(() => {
+        this.loadExistingOrDraft();
+      });
     });
   }
 
@@ -198,6 +241,7 @@ export struct DeviceEditor {
     this.qrWaiting = false;
     this.qrPayload = '';
     this.qrCreds = undefined;
+    PresetStore.getDefault().applyTo(draft);
     this.applyDevice(draft);
   }
 
@@ -205,6 +249,9 @@ export struct DeviceEditor {
     const existing = DeviceStore.findByUuid(this.uuid);
     if (existing !== undefined) {
       this.editUuid = existing.uuid;
+      if (existing.presetId.length > 0 && PresetStore.get(existing.presetId) === undefined) {
+        existing.presetId = '';
+      }
       this.applyDevice(existing);
       this.isNew = false;
       return;
@@ -212,6 +259,7 @@ export struct DeviceEditor {
     const draft = DeviceStore.createDraft();
     this.editUuid = draft.uuid;
     this.isNew = true;
+    PresetStore.getDefault().applyTo(draft);
     this.applyDevice(draft);
   }
 
@@ -239,6 +287,7 @@ export struct DeviceEditor {
     this.maxFpsText = `${device.maxFps}`;
     this.maxVideoBitText = `${device.maxVideoBit}`;
     this.useH265 = device.useH265;
+    this.hevcProfile = device.hevcProfile;
     this.presetId = device.presetId;
     this.videoSource = device.videoSource === 'camera' ? 'camera' : 'display';
     this.cameraFacing = device.cameraFacing === 'front' ? 'front' : 'back';
@@ -282,10 +331,6 @@ export struct DeviceEditor {
   }
 
   private validate(): boolean {
-    if (this.nameText.trim().length === 0) {
-      this.toast('请填写设备名称');
-      return false;
-    }
     if (this.hostText.trim().length === 0) {
       this.toast('请填写主机地址');
       return false;
@@ -330,6 +375,7 @@ export struct DeviceEditor {
     device.maxFps = this.parsePort(this.maxFpsText, 60);
     device.maxVideoBit = this.parsePositive(this.maxVideoBitText, 4);
     device.useH265 = this.useH265;
+    device.hevcProfile = this.hevcProfile;
     device.presetId = this.presetId;
     device.videoSource = this.videoSource === 'camera' ? 'camera' : 'display';
     device.cameraFacing = this.cameraFacing === 'front' ? 'front' : 'back';
@@ -372,6 +418,27 @@ export struct DeviceEditor {
     this.presetId = '';
   }
 
+  private linkedPresetName(): string {
+    if (this.presetId.length === 0) {
+      return '';
+    }
+    const preset = PresetStore.get(this.presetId);
+    return preset !== undefined ? preset.name : '';
+  }
+
+  private openPresetPicker(): void {
+    this.presetOptions = PresetStore.all();
+    this.showPresetPicker = true;
+  }
+
+  private applyPickedPreset(preset: ConnectionPreset): void {
+    const device = this.buildDevice();
+    preset.applyTo(device);
+    this.applyDevice(device);
+    this.showPresetPicker = false;
+    this.toast(`已应用「${preset.name}」`);
+  }
+
   private async runPair(fillAdbPort: boolean): Promise<void> {
     if (this.pairBusy) {
       return;
@@ -405,13 +472,43 @@ export struct DeviceEditor {
     this.pairCodeText = '';
     if (fillAdbPort && result.connectPort > 0) {
       this.adbPortText = `${result.connectPort}`;
-      this.pairStatus = `配对成功。已填入连接端口 ${result.connectPort}`;
+      this.pairStatus = `配对成功。已填入连接端口 ${result.connectPort}（TLS 无线）`;
     } else if (fillAdbPort) {
-      this.pairStatus = '配对成功。未发现连接端口，请手动填写 ADB 端口后保存。';
+      this.pairStatus = '配对成功。未发现连接端口，请手动填写无线调试连接端口（非配对端口）';
     } else {
-      this.pairStatus = '配对成功。请确认连接端口后保存。';
+      this.pairStatus = result.detail.length > 0 ? result.detail : '配对成功';
     }
     this.toast('配对成功');
+    this.maybeFillNameFromProbe(
+      result.host,
+      result.connectPort > 0 ? result.connectPort : this.parsePort(this.adbPortText, 0)
+    );
+  }
+
+  /**
+   * Empty name stays a lazy placeholder until getprop succeeds (needs ADB connect port).
+   * Does not overwrite a name the user already typed.
+   */
+  private maybeFillNameFromProbe(host: string, adbPort: number): void {
+    if (this.nameText.trim().length > 0 || host.trim().length === 0 || adbPort <= 0) {
+      return;
+    }
+    const draft = new Device();
+    draft.address = host.trim();
+    draft.adbPort = adbPort;
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    void probeRemoteSystemPropsLazy(ctx, draft).then((props: RemoteSystemProps) => {
+      if (this.nameText.trim().length > 0) {
+        return;
+      }
+      const model = props.ok ? props.model.trim() : '';
+      if (model.length === 0) {
+        return;
+      }
+      this.nameText = model;
+    }).catch(() => {
+      // Keep the lazy placeholder; Home probe can fill after save.
+    });
   }
 
   private releaseQrPixelMap(): void {
@@ -425,27 +522,92 @@ export struct DeviceEditor {
     }
   }
 
-  private resetQrSessionState(): void {
-    this.qrSessionId += 1;
+  private setQrStatus(text: string): void {
+    this.pairStatus = text;
+    AppStorage.setOrCreate(QR_PAIR_STATUS_KEY, text);
+  }
+
+  private onQrProgress(stage: QrPairStage, detail: string): void {
+    this.setQrStatus(detail);
+    hilog.info(0x0001, 'DeviceEditor', 'QR stage=%{public}s %{public}s', stage, detail);
+  }
+
+  /**
+   * Apply a completed QR pair to the form. Must run even if the dialog was dismissed —
+   * Android already shows paired; dropping this result is the silent-success bug.
+   */
+  private applyQrPairSuccess(result: PairWirelessResult): void {
     this.qrWaiting = false;
-    if (this.pairStatus === '等待被控机扫描…') {
-      this.pairStatus = '';
+    this.closeQrDialogOnly();
+    this.pairPortText = '';
+    this.pairCodeText = '';
+    if (result.host.length > 0) {
+      this.hostText = result.host;
     }
+    if (result.connectPort > 0) {
+      this.adbPortText = `${result.connectPort}`;
+      this.setQrStatus(`二维码配对成功。已填入连接端口 ${result.connectPort}（TLS 无线）`);
+    } else {
+      // Do not leave a stale classic 5555 when wireless pair succeeded without mDNS.
+      if (this.adbPortText === '5555') {
+        this.adbPortText = '';
+      }
+      this.setQrStatus(result.detail.length > 0
+        ? result.detail
+        : '二维码配对成功。请填写无线调试「连接端口」（非配对端口）后保存。');
+    }
+    this.toast('配对成功');
+    this.maybeFillNameFromProbe(
+      result.host,
+      result.connectPort > 0 ? result.connectPort : this.parsePort(this.adbPortText, 0)
+    );
     this.releaseQrPixelMap();
     this.qrPayload = '';
     this.qrCreds = undefined;
-    try {
-      this.getUIContext().getFocusController().clearFocus();
-    } catch (_e) {
-      // Focus controller unavailable in some hosts.
+  }
+
+  private applyQrPairFailure(detail: string): void {
+    this.qrWaiting = false;
+    this.closeQrDialogOnly();
+    const msg = detail.length > 0 ? detail : '二维码配对失败';
+    this.setQrStatus(msg);
+    this.toast(msg);
+    AppErrorLog.e('qr-pair', msg);
+    this.releaseQrPixelMap();
+    this.qrPayload = '';
+    this.qrCreds = undefined;
+  }
+
+  /** Close dialog chrome without bumping session (used after terminal pair result). */
+  private closeQrDialogOnly(): void {
+    const node = this.qrDialogNode;
+    this.qrDialogNode = undefined;
+    if (node !== undefined) {
+      void this.getUIContext().getPromptAction().closeCustomDialog(node).catch(() => {
+        // Dialog may already be dismissed.
+      });
     }
   }
 
-  /** Close QR dialog + cancel in-flight wait; restore editor interaction. */
+  /** User-cancel: stop waiting UI; in-flight pair still applies success if it completes. */
   private dismissQrDialog(): void {
     const node = this.qrDialogNode;
     this.qrDialogNode = undefined;
-    this.resetQrSessionState();
+    this.qrWaiting = false;
+    // Bump session so a late *failure* is ignored; success still applies via applyQrPairSuccess.
+    this.qrSessionId += 1;
+    this.releaseQrPixelMap();
+    this.qrPayload = '';
+    this.qrCreds = undefined;
+    if (this.pairStatus === '等待被控机扫描…' || this.pairStatus.indexOf('等待被控机') >= 0) {
+      this.pairStatus = '';
+    }
+    AppStorage.setOrCreate(QR_PAIR_STATUS_KEY, '');
+    try {
+      this.getUIContext().getFocusController().clearFocus();
+    } catch (_e) {
+      // ignore
+    }
     if (node !== undefined) {
       void this.getUIContext().getPromptAction().closeCustomDialog(node).catch(() => {
         // Dialog may already be dismissed by autoCancel / back.
@@ -463,6 +625,7 @@ export struct DeviceEditor {
         // ignore
       }
     }
+    AppStorage.setOrCreate(QR_PAIR_STATUS_KEY, '等待被控机扫描…');
     const ui = this.getUIContext();
     const params = new QrPairDialogParams();
     params.payload = this.qrPayload;
@@ -480,7 +643,12 @@ export struct DeviceEditor {
       onWillDismiss: (action: DismissDialogAction) => {
         // Outside tap / system dismiss — do not call closeCustomDialog again.
         this.qrDialogNode = undefined;
-        this.resetQrSessionState();
+        this.qrWaiting = false;
+        this.qrSessionId += 1;
+        this.releaseQrPixelMap();
+        this.qrPayload = '';
+        this.qrCreds = undefined;
+        AppStorage.setOrCreate(QR_PAIR_STATUS_KEY, '');
         action.dismiss();
       },
     });
@@ -496,7 +664,7 @@ export struct DeviceEditor {
     const session = this.qrSessionId + 1;
     this.qrSessionId = session;
     this.qrWaiting = true;
-    this.pairStatus = '等待被控机扫描…';
+    this.setQrStatus('等待被控机扫描…');
 
     const pixelMap = await encodeQrPixelMap(this.qrPayload);
     if (session !== this.qrSessionId) {
@@ -525,6 +693,7 @@ export struct DeviceEditor {
       const err = e as Error;
       const msg = err !== undefined && err.message !== undefined ? err.message : String(e);
       this.toast(`无法打开二维码对话框：${msg}`);
+      AppErrorLog.e('qr-pair', `无法打开二维码对话框：${msg}`);
       return;
     }
     if (session !== this.qrSessionId) {
@@ -533,35 +702,47 @@ export struct DeviceEditor {
 
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
     const creds = this.qrCreds;
-    const result = await pairWithQrCredentials(ctx, creds, 60000);
+    if (creds === undefined) {
+      this.applyQrPairFailure('二维码凭证丢失，请重试');
+      return;
+    }
+    // Capture credentials — dismiss may clear this.qrCreds while we await.
+    const serviceName = creds.serviceName;
+    const password = creds.password;
+    const frozen = new AdbQrCredentials(serviceName, password);
+
+    let result: PairWirelessResult;
+    try {
+      result = await pairWithQrCredentials(ctx, frozen, 90000, (stage: QrPairStage, detail: string) => {
+        // Always push progress so dialog/storage update even if session was soft-cancelled.
+        this.onQrProgress(stage, detail);
+      });
+    } catch (e) {
+      const err = e as Error;
+      const msg = err !== undefined && err.message !== undefined ? err.message : String(e);
+      this.applyQrPairFailure(msg);
+      return;
+    }
+
+    // Success must apply even if the user closed the dialog after Android already paired.
+    if (result.ok) {
+      this.applyQrPairSuccess(result);
+      return;
+    }
+    // Failure: only surface if this session is still the active one (user did not cancel).
     if (session !== this.qrSessionId) {
+      hilog.info(0x0001, 'DeviceEditor', 'QR fail ignored after cancel: %{public}s', result.detail);
       return;
     }
-    this.qrWaiting = false;
-    if (!result.ok) {
-      this.pairStatus = result.detail;
-      this.toast(result.detail);
-      return;
-    }
-    this.dismissQrDialog();
-    this.pairPortText = '';
-    this.pairCodeText = '';
-    if (result.host.length > 0) {
-      this.hostText = result.host;
-    }
-    if (result.connectPort > 0) {
-      this.adbPortText = `${result.connectPort}`;
-      this.pairStatus = `二维码配对成功。已填入连接端口 ${result.connectPort}`;
-    } else {
-      this.pairStatus = '二维码配对成功。请确认连接端口后保存。';
-    }
-    this.toast('配对成功');
+    this.applyQrPairFailure(result.detail);
   }
 
   aboutToDisappear(): void {
     this.qrSessionId += 1;
     const node = this.qrDialogNode;
     this.qrDialogNode = undefined;
+    this.qrWaiting = false;
+    AppStorage.setOrCreate(QR_PAIR_STATUS_KEY, '');
     if (node !== undefined) {
       try {
         this.getUIContext().getPromptAction().closeCustomDialog(node);
@@ -584,55 +765,38 @@ export struct DeviceEditor {
     }
     void DeviceStore.upsert(this.buildDevice()).then((saved: Device) => {
       this.isNew = false;
-      if (andConnect) {
-        this.toast(`已保存，正在连接 ${saved.name}`);
+      if (!andConnect) {
+        this.toast(`已保存 · ${displayDeviceName(saved)}`);
+        if (this.embedded) {
+          this.onSaved();
+          return;
+        }
+        this.pathStack.pop();
+        return;
+      }
+      void probeTcpReachableLazy(saved.address, saved.adbPort).then((reach) => {
+        if (!reach.ok) {
+          this.toast(`已保存 · ${reach.detail}`);
+          if (this.embedded) {
+            this.onSaved();
+          }
+          return;
+        }
+        this.toast(`已保存，正在连接 ${displayDeviceName(saved)}`);
         if (this.embedded) {
           this.onSaved();
           this.pathStack.pushPath({ name: 'session', param: saved.uuid });
         } else {
           this.pathStack.replacePath({ name: 'session', param: saved.uuid });
         }
-        return;
-      }
-      this.toast(`已保存 · ${saved.name}`);
-      if (this.embedded) {
-        this.onSaved();
-        return;
-      }
-      this.pathStack.pop();
+      });
     }).catch(() => {
       this.toast('保存失败');
     });
   }
 
-  @Builder
-  private titleBar() {
-    Row({ space: 8 }) {
-      Button({ type: ButtonType.Normal }) {
-        SymbolGlyph($r('sys.symbol.chevron_left'))
-          .fontSize(22)
-          .fontColor([$r('app.color.ink')])
-      }
-      .width(40)
-      .height(40)
-      .backgroundColor(Color.Transparent)
-      .onClick(() => {
-        this.pathStack.pop();
-      })
-
-      Text(this.isNew ? $r('app.string.editor_title_new') : $r('app.string.editor_title_edit'))
-        .fontSize(20)
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.ink'))
-        .layoutWeight(1)
-    }
-    .width('100%')
-    .padding({
-      left: 8,
-      right: $r('app.float.space_page_h'),
-      top: 8 + this.safeTopVp,
-      bottom: 4,
-    })
+  private editorPageTitle(): Resource {
+    return this.isNew ? $r('app.string.editor_title_new') : $r('app.string.editor_title_edit');
   }
 
   @Builder
@@ -712,7 +876,7 @@ export struct DeviceEditor {
     Column({ space: 16 }) {
       Column({ space: 0 }) {
         this.fieldLabel($r('app.string.editor_field_name'))
-        TextInput({ text: this.nameText, placeholder: '例如 Pixel Demo' })
+        TextInput({ text: this.nameText, placeholder: $r('app.string.editor_field_name_placeholder') })
           .height(44)
           .backgroundColor($r('app.color.surface_muted'))
           .borderRadius($r('app.float.radius_md'))
@@ -800,6 +964,47 @@ export struct DeviceEditor {
   @Builder
   private videoForm() {
     Column({ space: 16 }) {
+      Column({ space: 8 }) {
+        Text($r('app.string.preset_apply_section'))
+          .fontSize(13)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.accent_blue'))
+          .width('100%')
+        Text(this.linkedPresetName().length > 0
+          ? `已关联：${this.linkedPresetName()}`
+          : '自定义（未关联预设）')
+          .fontSize(14)
+          .fontColor($r('app.color.ink'))
+          .width('100%')
+        Text($r('app.string.preset_apply_device_hint'))
+          .fontSize(12)
+          .fontColor($r('app.color.text_secondary'))
+          .width('100%')
+        Button($r('app.string.preset_apply'))
+          .type(ButtonType.Capsule)
+          .width('100%')
+          .height(40)
+          .backgroundColor($r('app.color.brand_ink'))
+          .fontColor($r('app.color.on_brand_ink'))
+          .onClick(() => {
+            this.openPresetPicker();
+          })
+        if (this.presetId.length > 0) {
+          Button($r('app.string.preset_detach'))
+            .type(ButtonType.Capsule)
+            .width('100%')
+            .height(40)
+            .backgroundColor($r('app.color.surface_muted'))
+            .fontColor($r('app.color.ink'))
+            .onClick(() => {
+              this.detachPreset();
+              this.toast('已解除关联 — 本设备画面选项现为自定义');
+            })
+        }
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Start)
+
       Column({ space: 0 }) {
         this.fieldLabel('视频源')
         Select([
@@ -1163,20 +1368,62 @@ export struct DeviceEditor {
           })
       }.width('100%')
 
-      if (this.presetId.length > 0) {
-        Text(`已链接预设：${this.presetId}`)
-          .fontSize(12)
-          .fontColor($r('app.color.accent_blue'))
-          .width('100%')
-      } else {
-        Text($r('app.string.editor_video_hint'))
-          .fontSize(12)
-          .fontColor($r('app.color.text_secondary'))
-          .width('100%')
-      }
+      Text($r('app.string.editor_video_hint'))
+        .fontSize(12)
+        .fontColor($r('app.color.text_secondary'))
+        .width('100%')
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private presetPickerBuilder() {
+    Column({ space: 8 }) {
+      Text($r('app.string.preset_apply'))
+        .fontSize(18)
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.ink'))
+        .width('100%')
+      Text($r('app.string.preset_picker_hint'))
+        .fontSize(12)
+        .fontColor($r('app.color.text_secondary'))
+        .width('100%')
+        .margin({ bottom: 8 })
+
+      ForEach(this.presetOptions, (preset: ConnectionPreset) => {
+        Column({ space: 2 }) {
+          Text(preset.name)
+            .fontSize(16)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.ink'))
+            .width('100%')
+          Text(PresetStore.summaryLine(preset))
+            .fontSize(12)
+            .fontColor($r('app.color.text_secondary'))
+            .width('100%')
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+        .padding({ top: 12, bottom: 12 })
+        .onClick(() => {
+          this.applyPickedPreset(preset);
+        })
+      }, (preset: ConnectionPreset) => preset.id)
+
+      Button('取消')
+        .type(ButtonType.Capsule)
+        .width('100%')
+        .height(40)
+        .margin({ top: 8 })
+        .backgroundColor($r('app.color.surface_muted'))
+        .fontColor($r('app.color.ink'))
+        .onClick(() => {
+          this.showPresetPicker = false;
+        })
+    }
+    .width('100%')
+    .padding({ left: 20, right: 20, top: 8, bottom: 28 + this.safeBottomVp })
   }
 
   @Builder
@@ -1188,12 +1435,11 @@ export struct DeviceEditor {
         .width('100%')
 
       Button($r('app.string.editor_action_qr_pair'))
-        .type(ButtonType.Normal)
+        .type(ButtonType.Capsule)
         .width('100%')
-        .height(44)
+        .height(40)
         .backgroundColor($r('app.color.accent_container'))
         .fontColor($r('app.color.accent_blue'))
-        .borderRadius($r('app.float.radius_md'))
         .enabled(!this.pairBusy && !this.qrWaiting)
         .onClick(() => {
           void this.openQrPair();
@@ -1272,23 +1518,21 @@ export struct DeviceEditor {
 
       Row({ space: 8 }) {
         Button($r('app.string.editor_action_pair_only'))
-          .type(ButtonType.Normal)
+          .type(ButtonType.Capsule)
           .layoutWeight(1)
           .height(40)
           .backgroundColor($r('app.color.surface_muted'))
           .fontColor($r('app.color.ink'))
-          .borderRadius($r('app.float.radius_md'))
           .enabled(!this.pairBusy)
           .onClick(() => {
             void this.runPair(false);
           })
         Button($r('app.string.editor_action_pair_fill'))
-          .type(ButtonType.Normal)
+          .type(ButtonType.Capsule)
           .layoutWeight(1)
           .height(40)
           .backgroundColor($r('app.color.accent_container'))
           .fontColor($r('app.color.accent_blue'))
-          .borderRadius($r('app.float.radius_md'))
           .enabled(!this.pairBusy)
           .onClick(() => {
             void this.runPair(true);
@@ -1298,24 +1542,22 @@ export struct DeviceEditor {
 
       Row({ space: 10 }) {
         Button($r('app.string.action_save'))
-          .type(ButtonType.Normal)
+          .type(ButtonType.Capsule)
           .layoutWeight(1)
-          .height(44)
+          .height(40)
           .backgroundColor($r('app.color.accent_container'))
           .fontColor($r('app.color.accent_blue'))
-          .borderRadius($r('app.float.radius_md'))
           .enabled(!this.pairBusy)
           .onClick(() => {
             this.onSave(false);
           })
 
         Button($r('app.string.action_save_connect'))
-          .type(ButtonType.Normal)
+          .type(ButtonType.Capsule)
           .layoutWeight(1)
-          .height(44)
+          .height(40)
           .backgroundColor($r('app.color.brand_ink'))
-          .fontColor(Color.White)
-          .borderRadius($r('app.float.radius_md'))
+          .fontColor($r('app.color.on_brand_ink'))
           .enabled(!this.pairBusy)
           .onClick(() => {
             this.onSave(true);
@@ -1336,9 +1578,7 @@ export struct DeviceEditor {
   @Builder
   private editorBody() {
     Column() {
-      if (!this.embedded) {
-        this.titleBar()
-      }
+      // Non-embedded: NavDestination system title + back (HarmonyOS standard).
 
       if (this.preferSplit && !this.embedded) {
         Row({ space: 12 }) {
@@ -1421,15 +1661,25 @@ export struct DeviceEditor {
       }
       .width('100%')
       .height('100%')
+      .bindSheet($$this.showPresetPicker, this.presetPickerBuilder(), {
+        height: SheetSize.FIT_CONTENT,
+        dragBar: true,
+        showClose: true,
+        backgroundColor: $r('app.color.surface_card'),
+      })
     } else {
       NavDestination() {
         this.editorBody()
       }
-      .hideTitleBar(true)
+      .title(this.editorPageTitle())
+      .hideTitleBar(false)
       .backgroundColor($r('app.color.page_background'))
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM],
-        [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
+      .bindSheet($$this.showPresetPicker, this.presetPickerBuilder(), {
+        height: SheetSize.FIT_CONTENT,
+        dragBar: true,
+        showClose: true,
+        backgroundColor: $r('app.color.surface_card'),
+      })
       .onBackPressed(() => {
         if (this.qrDialogNode !== undefined || this.qrWaiting) {
           this.dismissQrDialog();

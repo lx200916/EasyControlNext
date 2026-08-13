@@ -698,3 +698,17 @@ pub fn snapshot() -> StatusSnapshot {
     detail,
   }
 }
+
+/// Create+destroy only — does not touch the live audio decoder STATE.
+pub fn probe_create(use_opus: bool) -> Result<(), String> {
+  let mime = mime_for(use_opus);
+  let mime_label = if use_opus { "audio/opus" } else { "audio/mp4a-latm" };
+  let codec = unsafe { OH_AudioCodec_CreateByMime(mime.as_ptr() as *const c_char, false) };
+  if codec.is_null() {
+    return Err(format!("CreateByMime null ({mime_label})"));
+  }
+  unsafe {
+    OH_AudioCodec_Destroy(codec);
+  }
+  Ok(())
+}

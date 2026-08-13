@@ -4,6 +4,7 @@
  */
 
 import { pasteboard } from '@kit.BasicServicesKit';
+import { SymbolGlyphModifier } from '@kit.ArkUI';
 import {
   AppErrorLog,
   ErrorLogEntry,
@@ -16,14 +17,12 @@ type LevelFilter = 'all' | 'error' | 'warn';
 @Component
 export struct ErrorLog {
   @Consume('pathStack') pathStack: NavPathStack;
-  @Consume('safeTopVp') safeTopVp: number;
   @Consume('safeBottomVp') safeBottomVp: number;
   @State private entries: ErrorLogEntry[] = [];
   @State private filtered: ErrorLogEntry[] = [];
   @State private query: string = '';
   @State private levelFilter: LevelFilter = 'all';
   @State private expandedIndex: number = -1;
-  @State private showClearConfirm: boolean = false;
 
   aboutToAppear(): void {
     this.reload();
@@ -100,9 +99,29 @@ export struct ErrorLog {
     }
   }
 
+  private confirmClear(): void {
+    AlertDialog.show({
+      title: $r('app.string.error_log_clear_title'),
+      message: $r('app.string.error_log_clear_message'),
+      autoCancel: true,
+      alignment: DialogAlignment.Center,
+      primaryButton: {
+        value: '取消',
+        action: () => {
+        },
+      },
+      secondaryButton: {
+        value: $r('app.string.error_log_clear'),
+        fontColor: Color.Red,
+        action: () => {
+          this.doClear();
+        },
+      },
+    });
+  }
+
   private doClear(): void {
     AppErrorLog.clear();
-    this.showClearConfirm = false;
     this.reload();
     this.toast('已清空');
   }
@@ -111,24 +130,15 @@ export struct ErrorLog {
   private filterChip(id: LevelFilter, label: Resource) {
     Text(label)
       .fontSize(13)
-      .fontColor(this.levelFilter === id ? Color.White : $r('app.color.ink'))
+      .fontColor(this.levelFilter === id ? $r('app.color.on_brand_ink') : $r('app.color.ink'))
       .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-      .borderRadius(14)
+      .borderRadius(20)
       .backgroundColor(this.levelFilter === id
         ? $r('app.color.brand_ink')
         : $r('app.color.surface_muted'))
       .onClick(() => {
         this.setFilter(id);
       })
-  }
-
-  @Builder
-  private toolbarBtn(label: string, onTap: () => void) {
-    Text(label)
-      .fontSize(13)
-      .fontColor($r('app.color.brand_primary'))
-      .padding({ left: 8, right: 8, top: 8, bottom: 8 })
-      .onClick(onTap)
   }
 
   @Builder
@@ -182,49 +192,12 @@ export struct ErrorLog {
   build() {
     NavDestination() {
       Column() {
-        Row({ space: 4 }) {
-          Button({ type: ButtonType.Normal }) {
-            SymbolGlyph($r('sys.symbol.chevron_left'))
-              .fontSize(22)
-              .fontColor([$r('app.color.ink')])
-          }
-          .width(40)
-          .height(40)
-          .backgroundColor(Color.Transparent)
-          .onClick(() => {
-            this.pathStack.pop();
-          })
-
-          Text($r('app.string.error_log_title'))
-            .fontSize(20)
-            .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.ink'))
-            .layoutWeight(1)
-
-          this.toolbarBtn('刷新', () => {
-            this.reload();
-          })
-          this.toolbarBtn('复制', () => {
-            void this.copyAll();
-          })
-          this.toolbarBtn('清空', () => {
-            this.showClearConfirm = true;
-          })
-        }
-        .width('100%')
-        .padding({
-          left: 8,
-          right: 8,
-          top: 8 + this.safeTopVp,
-          bottom: 4,
-        })
-
         TextInput({
           text: this.query,
           placeholder: '标签、消息、堆栈…',
         })
           .height(40)
-          .margin({ left: 16, right: 16, top: 4, bottom: 8 })
+          .margin({ left: 16, right: 16, top: 8, bottom: 8 })
           .backgroundColor($r('app.color.surface_muted'))
           .onChange((v: string) => {
             this.onQueryChange(v);
@@ -256,8 +229,9 @@ export struct ErrorLog {
               ListItem() {
                 this.entryRow(entry, index)
               }
-            }, (entry: ErrorLogEntry, index: number) =>
-              `${entry.timestampMs}_${entry.level}_${entry.tag}_${index}`)
+            }, (entry: ErrorLogEntry) => entry.id.length > 0
+              ? entry.id
+              : `${entry.timestampMs}_${entry.level}_${entry.tag}_${entry.message.length}`)
           }
           .width('100%')
           .layoutWeight(1)
@@ -272,59 +246,36 @@ export struct ErrorLog {
       .width('100%')
       .height('100%')
       .backgroundColor($r('app.color.page_background'))
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-      .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM],
-        [LayoutSafeAreaEdge.TOP, LayoutSafeAreaEdge.BOTTOM])
     }
-    .hideTitleBar(true)
+    .title($r('app.string.error_log_title'))
+    .hideTitleBar(false)
+    .menus([
+      {
+        value: '刷新',
+        symbolIcon: new SymbolGlyphModifier($r('sys.symbol.arrow_clockwise')),
+        action: () => {
+          this.reload();
+        },
+      },
+      {
+        value: '复制',
+        symbolIcon: new SymbolGlyphModifier($r('sys.symbol.doc')),
+        action: () => {
+          void this.copyAll();
+        },
+      },
+      {
+        value: '清空',
+        symbolIcon: new SymbolGlyphModifier($r('sys.symbol.trash')),
+        action: () => {
+          this.confirmClear();
+        },
+      },
+    ])
     .backgroundColor($r('app.color.page_background'))
-    .bindSheet($$this.showClearConfirm, this.clearConfirmBuilder(), {
-      height: SheetSize.FIT_CONTENT,
-      dragBar: true,
-      showClose: true,
-      backgroundColor: $r('app.color.surface_card'),
-    })
     .onBackPressed(() => {
       this.pathStack.pop();
       return true;
     })
-  }
-
-  @Builder
-  private clearConfirmBuilder() {
-    Column({ space: 12 }) {
-      Text($r('app.string.error_log_clear_title'))
-        .fontSize(18)
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.ink'))
-        .width('100%')
-      Text($r('app.string.error_log_clear_message'))
-        .fontSize(14)
-        .fontColor($r('app.color.text_secondary'))
-        .width('100%')
-      Row({ space: 12 }) {
-        Button('取消')
-          .type(ButtonType.Normal)
-          .layoutWeight(1)
-          .height(44)
-          .backgroundColor($r('app.color.surface_muted'))
-          .fontColor($r('app.color.ink'))
-          .onClick(() => {
-            this.showClearConfirm = false;
-          })
-        Button($r('app.string.error_log_clear'))
-          .type(ButtonType.Normal)
-          .layoutWeight(1)
-          .height(44)
-          .backgroundColor('#E53935')
-          .fontColor(Color.White)
-          .onClick(() => {
-            this.doClear();
-          })
-      }
-      .width('100%')
-    }
-    .width('100%')
-    .padding({ left: 20, right: 20, top: 8, bottom: 24 + this.safeBottomVp })
   }
 }

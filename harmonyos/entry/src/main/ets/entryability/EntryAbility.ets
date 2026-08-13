@@ -16,6 +16,7 @@ import {
   applyImmersiveSystemBarsIfIdle,
   CURRENT_COLOR_MODE_KEY,
 } from '../common/SystemInsets';
+import { DecoderCapsCache } from '../media/DecoderCapsCache';
 import { DeviceStore } from '../model/DeviceStore';
 import {
   PENDING_FORM_NAV_KEY,
@@ -72,6 +73,7 @@ export default class EntryAbility extends UIAbility {
       hilog.info(DOMAIN, 'EasyControlNext', 'Succeeded in loading the content.');
       // After content bind: warm settings + device cache without delaying loadContent.
       void AppSettings.init(this.context);
+      DecoderCapsCache.scheduleBackgroundProbe(this.context);
       void DeviceStore.init(this.context).catch((e: Error) => {
         const msg = e.message;
         hilog.error(DOMAIN, 'EasyControlNext', 'DeviceStore.init: %{public}s', msg);

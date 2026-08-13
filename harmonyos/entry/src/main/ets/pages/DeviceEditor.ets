@@ -25,6 +25,7 @@ import { ConnectionPreset } from '../model/ConnectionPreset';
 import { PresetStore } from '../model/PresetStore';
 import { probeRemoteSystemPropsLazy, probeTcpReachableLazy } from '../session/LiveMirrorLazy';
 import { RemoteSystemProps } from '../session/RemoteDeviceTypes';
+import { SessionLaunchOpts, stageSessionLaunch } from '../session/SessionLaunch';
 
 const SECTION_BASIC: string = 'basic';
 const SECTION_PAIRING: string = 'pairing';
@@ -146,7 +147,7 @@ export struct DeviceEditor {
   @Consume('pathStack') pathStack: NavPathStack;
   @Consume('preferSplit') preferSplit: boolean;
   @Consume('safeBottomVp') safeBottomVp: number;
-  @Prop uuid: string = 'new';
+  @Prop @Watch('onUuidChanged') uuid: string = 'new';
   /** When true, render inline (sheet / embedded host) without NavDestination / back chrome. */
   @Prop embedded: boolean = false;
   /** Bump to reset draft fields after a successful save (embedded create flow). */
@@ -184,7 +185,7 @@ export struct DeviceEditor {
   @State private maxSizeText: string = '1600';
   @State private maxFpsText: string = '60';
   @State private maxVideoBitText: string = '4';
-  @State private useH265: boolean = false;
+  @State private useH265: boolean = true;
   @State private presetId: string = '';
   @State private showPresetPicker: boolean = false;
   @State private presetOptions: ConnectionPreset[] = [];
@@ -209,19 +210,46 @@ export struct DeviceEditor {
   private qrCreds: AdbQrCredentials | undefined = undefined;
   /** Bumped on dismiss/cancel so in-flight QR pairing ignores late results. */
   private qrSessionId: number = 0;
+  /** Ignore stale PresetStore/DeviceStore init callbacks after uuid change or user edits. */
+  private loadGen: number = 0;
+  private formDirty: boolean = false;
+  private didLoad: boolean = false;
 
   aboutToAppear(): void {
+    this.reloadForm();
+  }
+
+  private onUuidChanged(): void {
+    this.formDirty = false;
+    this.didLoad = false;
+    this.reloadForm();
+  }
+
+  private reloadForm(): void {
     this.isNew = this.uuid === 'new' || this.uuid.length === 0;
+    const gen = ++this.loadGen;
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
     void PresetStore.init(ctx).then(() => {
+      if (gen !== this.loadGen || (this.formDirty && this.didLoad)) {
+        return;
+      }
       if (this.isNew) {
         this.resetToDraft();
+        this.didLoad = true;
         return;
       }
       void DeviceStore.init(ctx).then(() => {
+        if (gen !== this.loadGen || (this.formDirty && this.didLoad)) {
+          return;
+        }
         this.loadExistingOrDraft();
+        this.didLoad = true;
       }).catch(() => {
+        if (gen !== this.loadGen || (this.formDirty && this.didLoad)) {
+          return;
+        }
         this.loadExistingOrDraft();
+        this.didLoad = true;
       });
     });
   }
@@ -230,6 +258,8 @@ export struct DeviceEditor {
     if (!this.embedded) {
       return;
     }
+    this.formDirty = false;
+    this.didLoad = false;
     this.resetToDraft();
   }
 
@@ -766,8 +796,10 @@ export struct DeviceEditor {
     if (!this.validate()) {
       return;
     }
-    void DeviceStore.upsert(this.buildDevice()).then((saved: Device) => {
+    const draft = this.buildDevice();
+    void DeviceStore.upsert(draft).then((saved: Device) => {
       this.isNew = false;
+      this.formDirty = false;
       if (!andConnect) {
         this.toast(`已保存 · ${displayDeviceName(saved)}`);
         if (this.embedded) {
@@ -786,6 +818,9 @@ export struct DeviceEditor {
           return;
         }
         this.toast(`已保存，正在连接 ${displayDeviceName(saved)}`);
+        const opts = new SessionLaunchOpts();
+        opts.overrideDevice = saved;
+        stageSessionLaunch(opts);
         if (this.embedded) {
           this.onSaved();
           this.pathStack.pushPath({ name: 'session', param: saved.uuid });
@@ -885,6 +920,7 @@ export struct DeviceEditor {
           .borderRadius($r('app.float.radius_md'))
           .padding({ left: 12, right: 12 })
           .onChange((v: string) => {
+            this.formDirty = true;
             this.nameText = v;
           })
       }
@@ -899,6 +935,7 @@ export struct DeviceEditor {
           .borderRadius($r('app.float.radius_md'))
           .padding({ left: 12, right: 12 })
           .onChange((v: string) => {
+            this.formDirty = true;
             this.hostText = v;
           })
       }
@@ -914,6 +951,7 @@ export struct DeviceEditor {
           .borderRadius($r('app.float.radius_md'))
           .padding({ left: 12, right: 12 })
           .onChange((v: string) => {
+            this.formDirty = true;
             this.adbPortText = v;
           })
       }

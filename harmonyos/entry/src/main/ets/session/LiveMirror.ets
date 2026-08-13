@@ -102,7 +102,7 @@ async function loadLiveAssets(ctx: common.UIAbilityContext): Promise<CachedLiveA
 }
 
 /**
- * @param forceAvc When true, ignore device.useH265 and request AVC (HarmonyOS often lacks HEVC).
+ * @param forceAvc When true, ignore device.useH265 and request AVC (HEVC CreateByMime failed).
  */
 export async function startLiveMirror(
   ctx: common.UIAbilityContext,

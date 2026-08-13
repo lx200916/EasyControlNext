@@ -121,7 +121,7 @@ function dtoFromObject(raw: Record<string, Object>): PresetDto {
     maxSize: asNumber(raw['maxSize'], 1600),
     maxFps: asNumber(raw['maxFps'], 60),
     maxVideoBit: asNumber(raw['maxVideoBit'], 4),
-    useH265: asBoolean(raw['useH265'], false),
+    useH265: asBoolean(raw['useH265'], true),
     hevcProfile: asString(raw['hevcProfile'], 'main'),
     keepWakeOnRunning: asBoolean(raw['keepWakeOnRunning'], true),
     changeToFullOnConnect: asBoolean(raw['changeToFullOnConnect'], false),

@@ -1,6 +1,7 @@
 /**
  * Lazy-loaded native probe — imports libadb_core.so.
- * Call from Settings after user tap (not first-frame Home).
+ * Settings tap and first-launch background `DecoderCapsCache` (after first frame).
+ * Do not import this from Home / AppShell / Form Kit.
  */
 
 import adbCore from 'libadb_core.so';

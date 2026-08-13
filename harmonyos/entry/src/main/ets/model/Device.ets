@@ -20,7 +20,8 @@ export class Device {
   pairKey: string = '';
   /** Linked connection preset id, or empty when custom / detached (Android Device.presetId). */
   presetId: string = '';
-  useH265: boolean = false;
+  /** Default H.265 (Android parity). Session falls back to AVC if OHOS lacks HEVC. */
+  useH265: boolean = true;
   hevcProfile: HevcPref = 'main';
   isAudio: boolean = false;
   maxSize: number = 1600;

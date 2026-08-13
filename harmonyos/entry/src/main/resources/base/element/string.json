@@ -191,7 +191,7 @@
     },
     {
       "name": "editor_field_use_h265_hint",
-      "value": "双方都支持时使用 HEVC"
+      "value": "默认开启；本机无 HEVC 硬件解码时会话自动回退 H.264"
     },
     {
       "name": "editor_field_full_on_connect",
@@ -211,7 +211,7 @@
     },
     {
       "name": "editor_field_is_audio_hint",
-      "value": "连接时传给 server（需 Android 12+）。会话内可开关；控制器播放仍待接入"
+      "value": "连接时传给 server（需 Android 12+）。会话内可开关；本机硬件解码 Opus/AAC 播放"
     },
     {
       "name": "editor_field_listen_clip",

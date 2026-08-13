@@ -196,23 +196,16 @@ export struct Session {
   /** Android Client on-connect actions (wake / lightOff / custom res) — once per session. */
   private connectActionsApplied: boolean = false;
   private closeActionsApplied: boolean = false;
+  /**
+   * Navigation may reuse this Session for the same uuid (save-and-connect after
+   * an earlier visit). aboutToAppear is skipped; onPageShow rebinds from store.
+   */
+  private deviceBound: boolean = false;
 
   aboutToAppear(): void {
-    const launch = consumeSessionLaunch();
-    this.pendingOpenAppPicker = launch.openAppPicker;
-    if (launch.overrideDevice !== undefined) {
-      this.device = launch.overrideDevice;
-    } else {
-      this.device = DeviceStore.findByUuid(this.uuid);
+    if (!this.deviceBound) {
+      this.bindLaunchDevice();
     }
-    this.deviceName = this.device !== undefined ? displayDeviceName(this.device) : 'Session';
-    this.showNavBar = this.device !== undefined ? this.device.showNavBarOnConnect : true;
-    this.audioRelayOn = this.device !== undefined ? this.device.isAudio : false;
-    this.audioFailToasted = false;
-    this.statusLine = '正在连接…';
-    this.firstFrameOk = false;
-    this.connectActionsApplied = false;
-    this.closeActionsApplied = false;
     this.applyHoverChromeDefaults();
     this.applySessionSystemBars(true);
     try {
@@ -221,6 +214,33 @@ export struct Session {
     } catch (_e) {
       // preview hosts
     }
+  }
+
+  onPageShow(): void {
+    if (!this.deviceBound) {
+      this.bindLaunchDevice();
+    }
+  }
+
+  private bindLaunchDevice(): void {
+    const launch = consumeSessionLaunch();
+    this.pendingOpenAppPicker = launch.openAppPicker;
+    if (launch.overrideDevice !== undefined) {
+      this.device = launch.overrideDevice;
+    } else {
+      this.device = DeviceStore.findByUuid(this.uuid);
+    }
+    this.deviceBound = true;
+    this.deviceName = this.device !== undefined ? displayDeviceName(this.device) : 'Session';
+    this.showNavBar = this.device !== undefined ? this.device.showNavBarOnConnect : true;
+    this.audioRelayOn = this.device !== undefined ? this.device.isAudio : false;
+    this.audioFailToasted = false;
+    this.statusLine = '正在连接…';
+    this.firstFrameOk = false;
+    this.connectActionsApplied = false;
+    this.closeActionsApplied = false;
+    this.hevcAvcFallbackTried = false;
+    this.sessionStarted = false;
   }
 
   private onFoldPostureChange(): void {
@@ -257,6 +277,8 @@ export struct Session {
     stopLiveMirror();
     this.decodeSession.release();
     this.applySessionSystemBars(false);
+    this.deviceBound = false;
+    this.sessionStarted = false;
   }
 
   private applySessionSystemBars(enter: boolean): void {
@@ -613,7 +635,14 @@ export struct Session {
     if (device !== undefined) {
       device.isAudio = next;
       try {
-        await DeviceStore.upsert(device);
+        // Merge into the store clone so a reused Session cannot write a stale address.
+        const stored = DeviceStore.findByUuid(device.uuid);
+        if (stored !== undefined) {
+          stored.isAudio = next;
+          await DeviceStore.upsert(stored);
+        } else {
+          await DeviceStore.upsert(device);
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         hilog.warn(SESSION_LOG_DOMAIN, SESSION_LOG_TAG, 'audio relay persist failed %{public}s', msg);

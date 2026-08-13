@@ -2,6 +2,7 @@
  * Stream / session preset (Android ConnectionPreset). Identity fields stay on Device.
  */
 
+import { AppSettings } from '../common/AppSettings';
 import { Device, HevcPref } from './Device';
 
 export class ConnectionPreset {
@@ -20,7 +21,7 @@ export class ConnectionPreset {
   maxSize: number = 1600;
   maxFps: number = 60;
   maxVideoBit: number = 4;
-  useH265: boolean = false;
+  useH265: boolean = true;
   hevcProfile: string = 'main';
   keepWakeOnRunning: boolean = true;
   changeToFullOnConnect: boolean = false;
@@ -105,8 +106,8 @@ export function normalizeHevcProfile(raw: string): HevcPref {
 }
 
 function applyFactoryDefaults(p: ConnectionPreset): void {
-  // Default AVC: many HarmonyOS devices/emulators lack OH_VideoDecoder HEVC.
-  p.useH265 = false;
+  // Android parity: H.265. Background probe flips this to AVC when HEVC is missing.
+  p.useH265 = AppSettings.preferH265();
   p.hevcProfile = 'main';
   p.isAudio = false;
   p.keepWakeOnRunning = true;

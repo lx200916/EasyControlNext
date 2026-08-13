@@ -2,12 +2,14 @@ package com.shiyunjin.easycontrolnext.app.helper;
 
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Rect;
 import android.net.Uri;
+import android.os.Build;
 import android.util.Base64;
 import android.util.DisplayMetrics;
-import android.util.Log;
 import android.util.Pair;
 import android.view.Display;
+import android.view.WindowMetrics;
 import android.widget.Toast;
 
 import java.io.File;
@@ -119,9 +121,9 @@ public class PublicTools {
     }
   }
 
-  // 日志
+  // 日志（同步写入持久化错误日志，供设置页查看）
   public static void logToast(String type, String msg, boolean showToast) {
-    Log.e("Easycontrol_" + type, msg);
+    AppErrorLog.e(type, msg);
     if (showToast) AppData.uiHandler.post(() -> Toast.makeText(AppData.applicationContext, type + ":" + msg, Toast.LENGTH_SHORT).show());
   }
 
@@ -163,9 +165,23 @@ public class PublicTools {
     }
   }
 
-  // 获取设备当前分辨率
+  // 获取设备当前分辨率（优先 WindowMetrics，适配折叠屏 / 多窗口）
   public static DisplayMetrics getScreenSize() {
     DisplayMetrics screenSize = new DisplayMetrics();
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      try {
+        WindowMetrics metrics = AppData.windowManager.getMaximumWindowMetrics();
+        Rect bounds = metrics.getBounds();
+        screenSize.widthPixels = bounds.width();
+        screenSize.heightPixels = bounds.height();
+        DisplayMetrics densitySource = AppData.applicationContext.getResources().getDisplayMetrics();
+        screenSize.density = densitySource.density;
+        screenSize.densityDpi = densitySource.densityDpi;
+        screenSize.scaledDensity = densitySource.scaledDensity;
+        return screenSize;
+      } catch (Exception ignored) {
+      }
+    }
     Display display = AppData.windowManager.getDefaultDisplay();
     display.getRealMetrics(screenSize);
     return screenSize;

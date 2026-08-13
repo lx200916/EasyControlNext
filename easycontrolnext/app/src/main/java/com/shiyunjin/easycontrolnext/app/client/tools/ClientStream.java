@@ -15,6 +15,7 @@ import com.shiyunjin.easycontrolnext.app.client.decode.DecodecTools;
 import com.shiyunjin.easycontrolnext.app.entity.AppData;
 import com.shiyunjin.easycontrolnext.app.entity.Device;
 import com.shiyunjin.easycontrolnext.app.entity.MyInterface;
+import com.shiyunjin.easycontrolnext.app.helper.AppErrorLog;
 import com.shiyunjin.easycontrolnext.app.helper.PublicTools;
 
 public class ClientStream {
@@ -37,11 +38,19 @@ public class ClientStream {
   private static final int timeoutDelay = 1000 * 15;
 
   public ClientStream(Device device, MyInterface.MyFunctionBoolean handle) {
+    final boolean cameraMode = device.videoSource != null && "camera".equalsIgnoreCase(device.videoSource);
     // 超时
     Thread timeOutThread = new Thread(() -> {
       try {
         Thread.sleep(timeoutDelay);
-        PublicTools.logToast("stream", AppData.applicationContext.getString(R.string.toast_timeout), true);
+        String msg = AppData.applicationContext.getString(R.string.toast_timeout);
+        if (cameraMode) {
+          String cameraErr = peekCameraServerError();
+          if (cameraErr != null) {
+            msg = AppData.applicationContext.getString(R.string.toast_camera_failed, cameraErr);
+          }
+        }
+        PublicTools.logToast("stream", msg, true);
         handle.run(false);
         if (connectThread != null) connectThread.interrupt();
       } catch (InterruptedException ignored) {
@@ -55,7 +64,16 @@ public class ClientStream {
         connectServer(device);
         handle.run(true);
       } catch (Exception e) {
-        PublicTools.logToast("stream", e.toString(), true);
+        String msg = e.getMessage() != null ? e.getMessage() : e.toString();
+        if (cameraMode) {
+          String cameraErr = peekCameraServerError();
+          if (cameraErr != null) {
+            msg = AppData.applicationContext.getString(R.string.toast_camera_failed, cameraErr);
+          } else if (msg.toLowerCase().contains("camera") || msg.contains("相机")) {
+            msg = AppData.applicationContext.getString(R.string.toast_camera_failed, msg);
+          }
+        }
+        PublicTools.logToast("stream", msg, true);
         handle.run(false);
       } finally {
         timeOutThread.interrupt();
@@ -65,12 +83,103 @@ public class ClientStream {
     timeOutThread.start();
   }
 
+  /** Best-effort parse of shell stderr when camera server dies before sockets accept. */
+  private String peekCameraServerError() {
+    if (shell == null) return null;
+    try {
+      Thread.sleep(300);
+      String out = new String(shell.readByteArrayBeforeClose().array());
+      if (out.isEmpty()) return null;
+      PublicTools.logToast("server", out, false);
+      String lower = out.toLowerCase();
+      // Prefer the explicit camera / IOException lines from Server.main / VideoEncode.
+      String[] markers = {
+        "camera capture failed:",
+        "camera mirroring requires",
+        "camera error",
+        "open camera",
+        "camera session",
+        "camera permission",
+        "no matching camera",
+        "no suitable camera",
+        "cameramanager unavailable",
+        "cameracapture not prepared"
+      };
+      for (String line : out.split("\n")) {
+        String trimmed = line.trim();
+        if (trimmed.isEmpty()) continue;
+        String lineLower = trimmed.toLowerCase();
+        for (String marker : markers) {
+          if (lineLower.contains(marker)) {
+            int idx = lineLower.indexOf(marker);
+            String detail = trimmed.substring(idx).replaceFirst("(?i)^camera capture failed:\\s*", "");
+            if (detail.length() > 180) detail = detail.substring(0, 180) + "…";
+            return detail;
+          }
+        }
+      }
+      if (lower.contains("camera")) {
+        // Fall back to last non-empty line mentioning camera
+        String last = null;
+        for (String line : out.split("\n")) {
+          if (line.toLowerCase().contains("camera")) last = line.trim();
+        }
+        if (last != null) {
+          if (last.length() > 180) last = last.substring(0, 180) + "…";
+          return last;
+        }
+      }
+    } catch (Exception ignored) {
+    }
+    return null;
+  }
+
   // 启动Server
   private void startServer(Device device) throws Exception {
     if (BuildConfig.ENABLE_DEBUG_FEATURE || !adb.runAdbCmd("ls /data/local/tmp/easycontrolnext_*").contains(serverName)) {
       adb.runAdbCmd("rm /data/local/tmp/easycontrolnext_* ");
       adb.pushFile(AppData.applicationContext.getResources().openRawResource(R.raw.easycontrolnext_server), serverName, null);
     }
+
+    String videoSource = device.videoSource == null || device.videoSource.isEmpty() ? "display" : device.videoSource;
+    String startApp = device.startApp == null ? "" : device.startApp.trim();
+    if ("camera".equalsIgnoreCase(videoSource)) {
+      int sdk = readDeviceSdk(adb);
+      if (sdk > 0 && sdk < 31) {
+        throw new Exception(AppData.applicationContext.getString(R.string.toast_camera_android12));
+      }
+      startApp = ""; // camera source ignores single-app VD
+    } else if (!startApp.isEmpty()) {
+      int sdk = readDeviceSdk(adb);
+      if (sdk > 0 && sdk < 30) {
+        throw new Exception(AppData.applicationContext.getString(R.string.toast_virtual_display_android11));
+      }
+    }
+
+    String cameraFacing = device.cameraFacing == null || device.cameraFacing.isEmpty() ? "back" : device.cameraFacing;
+    // User preference ∩ decode caps; server intersects with encode caps.
+    String hevcPref = device.hevcProfile == null ? DecodecTools.HEVC_PREF_MAIN : device.hevcProfile.trim().toLowerCase();
+    if (!DecodecTools.HEVC_PREF_AUTO.equals(hevcPref)
+      && !DecodecTools.HEVC_PREF_MAIN10.equals(hevcPref)
+      && !DecodecTools.HEVC_PREF_MAIN.equals(hevcPref)) {
+      hevcPref = DecodecTools.HEVC_PREF_MAIN;
+    }
+    String hevcProfile = DecodecTools.HEVC_PROFILE_NONE;
+    if (device.useH265 && supportH265) {
+      hevcProfile = DecodecTools.resolveRequestedHevcProfile(hevcPref);
+    }
+    boolean enableH265 = !DecodecTools.HEVC_PROFILE_NONE.equals(hevcProfile);
+    if (DecodecTools.HEVC_PREF_MAIN10.equals(hevcPref)
+      && enableH265
+      && !DecodecTools.HEVC_PROFILE_MAIN10.equals(hevcProfile)) {
+      PublicTools.logToast("hevc", AppData.applicationContext.getString(R.string.toast_hevc_main10_fallback), true);
+    }
+    AppErrorLog.w("hevc", "pref=" + hevcPref
+      + " decode caps: h265=" + supportH265
+      + " main=" + DecodecTools.isSupportHevcMain()
+      + " main10=" + DecodecTools.isSupportHevcMain10()
+      + " → request hevcProfile=" + hevcProfile
+      + " (device.useH265=" + device.useH265 + ")");
     shell = adb.getShell();
     shell.write(ByteBuffer.wrap(("app_process -Djava.class.path=" + serverName + " / com.shiyunjin.easycontrolnext.server.Server"
       + " serverPort=" + device.serverPort
@@ -80,9 +189,32 @@ public class ClientStream {
       + " maxFps=" + device.maxFps
       + " maxVideoBit=" + device.maxVideoBit
       + " keepAwake=" + (device.keepWakeOnRunning ? 1 : 0)
-      + " supportH265=" + ((device.useH265 && supportH265) ? 1 : 0)
+      + " supportH265=" + (enableH265 ? 1 : 0)
+      + " hevcProfile=" + hevcProfile
       + " supportOpus=" + (supportOpus ? 1 : 0)
-      + " startApp=" + device.startApp + " \n").getBytes()));
+      + " videoSource=" + videoSource
+      + " cameraFacing=" + cameraFacing
+      + " virtualWidth=" + device.virtualWidth
+      + " virtualHeight=" + device.virtualHeight
+      + " virtualDpi=" + device.virtualDpi
+      + " startApp=" + startApp + " \n").getBytes()));
+  }
+
+  private static int readDeviceSdk(Adb adb) {
+    try {
+      String sdk = adb.runAdbCmd("getprop ro.build.version.sdk").trim();
+      // take first integer token
+      StringBuilder digits = new StringBuilder();
+      for (int i = 0; i < sdk.length(); i++) {
+        char c = sdk.charAt(i);
+        if (c >= '0' && c <= '9') digits.append(c);
+        else if (digits.length() > 0) break;
+      }
+      if (digits.length() == 0) return -1;
+      return Integer.parseInt(digits.toString());
+    } catch (Exception e) {
+      return -1;
+    }
   }
 
   // 连接Server

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Exact SoftGrayBg used by Compose — entering activity preview must match final bars. -->
+  <color name="compose_window_background">#F2F3F5</color>
+  <color name="compose_window_background_dark">#0F1115</color>
+
+  <style name="Theme.EasyControl" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+    <item name="android:windowBackground">@color/compose_window_background</item>
+    <item name="android:colorBackground">@color/compose_window_background</item>
+    <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    <item name="android:statusBarColor">@color/compose_window_background</item>
+    <!-- Opaque SoftGrayBg: never black during Activity open animation -->
+    <item name="android:navigationBarColor">@color/compose_window_background</item>
+    <item name="android:windowLightStatusBar">true</item>
+    <item name="android:windowLightNavigationBar">true</item>
+    <item name="android:navigationBarDividerColor">@android:color/transparent</item>
+    <item name="android:enforceNavigationBarContrast">false</item>
+    <item name="android:enforceStatusBarContrast">false</item>
+    <item name="android:windowIsTranslucent">false</item>
+    <!-- Fade-only (no slide): keeps opaque SoftGrayBg bars stable on OEM window swap. -->
+    <item name="android:windowAnimationStyle">@style/Animation.EasyControl.Activity</item>
+    <item name="android:windowDisablePreview">true</item>
+  </style>
+</resources>

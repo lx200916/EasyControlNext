@@ -42,12 +42,12 @@ public class AdbConnectionManager extends AbsAdbConnectionManager {
         // Generate a new certificate
         String subject = "CN=Easy Control Next";
         String algorithmName = "SHA512withRSA";
-        long expiryDate = System.currentTimeMillis() + 86400000;
+        long expiryDate = System.currentTimeMillis() + 1000L * 60L * 60L * 24L * 365L * 30L; // ~30 years
         CertificateExtensions certificateExtensions = new CertificateExtensions();
         certificateExtensions.set("SubjectKeyIdentifier", new SubjectKeyIdentifierExtension(
                 new KeyIdentifier(publicKey).getIdentifier()));
         X500Name x500Name = new X500Name(subject);
-        Date notBefore = new Date();
+        Date notBefore = new Date(System.currentTimeMillis() - 24L * 60L * 60L * 1000L);
         Date notAfter = new Date(expiryDate);
         certificateExtensions.set("PrivateKeyUsage", new PrivateKeyUsageExtension(notBefore, notAfter));
         CertificateValidity certificateValidity = new CertificateValidity(notBefore, notAfter);

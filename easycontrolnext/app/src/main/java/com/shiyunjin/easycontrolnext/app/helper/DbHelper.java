@@ -14,7 +14,7 @@ import com.shiyunjin.easycontrolnext.app.entity.Device;
 public class DbHelper extends SQLiteOpenHelper {
 
   private static final String dataBaseName = "app.db";
-  private static final int version = 24;
+  private static final int version = 27;
   private final String tableName = "DevicesDb";
 
   public DbHelper(Context context) {
@@ -30,6 +30,12 @@ public class DbHelper extends SQLiteOpenHelper {
     stringBuilder.append("name text,");
     stringBuilder.append("address text,");
     stringBuilder.append("startApp text,");
+    stringBuilder.append("presetId text,");
+    stringBuilder.append("videoSource text,");
+    stringBuilder.append("cameraFacing text,");
+    stringBuilder.append("virtualWidth integer,");
+    stringBuilder.append("virtualHeight integer,");
+    stringBuilder.append("virtualDpi integer,");
     stringBuilder.append("adbPort integer,");
     stringBuilder.append("serverPort integer,");
     stringBuilder.append("listenClip integer,");
@@ -38,6 +44,7 @@ public class DbHelper extends SQLiteOpenHelper {
     stringBuilder.append("maxFps integer,");
     stringBuilder.append("maxVideoBit integer,");
     stringBuilder.append("useH265 integer,");
+    stringBuilder.append("hevcProfile text,");
     stringBuilder.append("connectOnStart integer,");
     stringBuilder.append("customResolutionOnConnect integer,");
     stringBuilder.append("wakeOnConnect integer,");
@@ -129,6 +136,12 @@ public class DbHelper extends SQLiteOpenHelper {
     values.put("name", device.name);
     values.put("address", device.address);
     values.put("startApp", device.startApp);
+    values.put("presetId", device.presetId == null ? "" : device.presetId);
+    values.put("videoSource", device.videoSource);
+    values.put("cameraFacing", device.cameraFacing);
+    values.put("virtualWidth", device.virtualWidth);
+    values.put("virtualHeight", device.virtualHeight);
+    values.put("virtualDpi", device.virtualDpi);
     values.put("adbPort", device.adbPort);
     values.put("serverPort", device.serverPort);
     values.put("listenClip", device.listenClip ? 1 : 0);
@@ -137,6 +150,7 @@ public class DbHelper extends SQLiteOpenHelper {
     values.put("maxFps", device.maxFps);
     values.put("maxVideoBit", device.maxVideoBit);
     values.put("useH265", device.useH265 ? 1 : 0);
+    values.put("hevcProfile", normalizeHevcProfile(device.hevcProfile));
     values.put("connectOnStart", device.connectOnStart ? 1 : 0);
     values.put("customResolutionOnConnect", device.customResolutionOnConnect ? 1 : 0);
     values.put("wakeOnConnect", device.wakeOnConnect ? 1 : 0);
@@ -182,6 +196,33 @@ public class DbHelper extends SQLiteOpenHelper {
           device.startApp = cursor.getString(i);
           break;
         }
+        case "presetId": {
+          String v = cursor.getString(i);
+          device.presetId = v == null ? "" : v;
+          break;
+        }
+        case "videoSource": {
+          String v = cursor.getString(i);
+          device.videoSource = v == null || v.isEmpty() ? "display" : v;
+          break;
+        }
+        case "cameraFacing": {
+          String v = cursor.getString(i);
+          device.cameraFacing = v == null || v.isEmpty() ? "back" : v;
+          break;
+        }
+        case "virtualWidth": {
+          device.virtualWidth = cursor.getInt(i);
+          break;
+        }
+        case "virtualHeight": {
+          device.virtualHeight = cursor.getInt(i);
+          break;
+        }
+        case "virtualDpi": {
+          device.virtualDpi = cursor.getInt(i);
+          break;
+        }
         case "adbPort": {
           device.adbPort = cursor.getInt(i);
           break;
@@ -212,6 +253,10 @@ public class DbHelper extends SQLiteOpenHelper {
         }
         case "useH265": {
           device.useH265 = cursor.getInt(i) == 1;
+          break;
+        }
+        case "hevcProfile": {
+          device.hevcProfile = normalizeHevcProfile(cursor.getString(i));
           break;
         }
         case "connectOnStart": {
@@ -317,5 +362,13 @@ public class DbHelper extends SQLiteOpenHelper {
       }
     }
     return device;
+  }
+
+  /** Persistable preference: auto | main | main10 (default main). */
+  public static String normalizeHevcProfile(String value) {
+    if (value == null) return "main";
+    String v = value.trim().toLowerCase();
+    if ("auto".equals(v) || "main10".equals(v) || "main".equals(v)) return v;
+    return "main";
   }
 }

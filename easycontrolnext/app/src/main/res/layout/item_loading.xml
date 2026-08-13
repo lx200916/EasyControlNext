@@ -1,20 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-  android:layout_width="match_parent"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="wrap_content"
   android:layout_height="wrap_content"
-  android:background="@drawable/background_cron"
-  android:paddingTop="15dp"
-  android:paddingBottom="15dp">
+  android:layout_gravity="center"
+  android:gravity="center_horizontal"
+  android:orientation="vertical"
+  android:paddingLeft="24dp"
+  android:paddingTop="20dp"
+  android:paddingRight="24dp"
+  android:paddingBottom="20dp">
+
+  <!-- M3 ContainedLoadingIndicator hosted via Compose for View-path parity -->
+  <androidx.compose.ui.platform.ComposeView
+    android:id="@+id/indicator"
+    android:layout_width="48dp"
+    android:layout_height="48dp" />
 
   <TextView
     android:id="@+id/text"
-    android:layout_width="match_parent"
+    android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:layout_gravity="center"
+    android:layout_marginTop="16dp"
+    android:background="@drawable/background_loading_m3"
+    android:fontFamily="sans-serif"
     android:gravity="center"
+    android:letterSpacing="0.02"
+    android:paddingLeft="16dp"
+    android:paddingTop="10dp"
+    android:paddingRight="16dp"
+    android:paddingBottom="10dp"
     android:text="@string/loading_text"
-    android:textColor="@color/onCardBackground"
-    android:textSize="@dimen/middleFont"
-    android:textStyle="bold" />
+    android:textColor="@color/onCardBackgroundSecond"
+    android:textSize="14sp" />
 
-</FrameLayout>
+</LinearLayout>

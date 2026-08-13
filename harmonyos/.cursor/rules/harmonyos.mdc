@@ -1,0 +1,32 @@
+---
+description: >
+  EasyControlNext HarmonyOS project rules. Follow AGENTS.md. Load harmonyos-development
+  skill references for kit/API details — do not inline the encyclopedia.
+globs: "**/*.{ets,ts,json5}"
+alwaysApply: false
+---
+
+# EasyControlNext HarmonyOS
+
+Follow [`AGENTS.md`](../../AGENTS.md). This rule is a short reminder, not a kit encyclopedia.
+
+## Always
+
+- Controller app only. Android peer is `../easycontrolnext/`. Do not add Compose/XML here.
+- Production SDK: **API 24 Release**. Do not default to API 26.
+- DeviceStore = **preferences** (`DevicePrefs`). No mock seed on empty.
+- Navigation + `NavPathStack`; Home **HdsTabs** + liquid glass; respect `safeBottomVp`.
+- Fold/split: **window width vp**, not display width. Split ≠ unfolded. `if/else` not `.visibility()`.
+- Native: `buildNativeOhos` runs `scripts/build_native_ohos.sh --if-needed` before `ProcessLibs`. Do not assume Assemble rebuilds `libadb_core.so` without that hook.
+
+## ArkTS (one-liners)
+
+- No `any`. `navDestination` = `@Builder` reference. `getContext(this)` deprecated.
+- `DataChangeListener`: new + deprecated method names. Permissions via `@kit.AbilityKit`.
+
+## Encyclopedia
+
+For Scan Kit, AVPlayer, fileIo, TaskPool, Hvigor, etc., read
+`.claude/skills/harmonyos-development/references/` via the skill routing table.
+Do not paste those files into answers.
+Pairing / live / first-frame / stale `.so`: `.cursor/skills/easycontrol-harmonyos-port/SKILL.md`.

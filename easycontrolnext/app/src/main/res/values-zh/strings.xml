@@ -11,15 +11,114 @@
   <string name="main_scan_device_local">本机</string>
   <string name="main_device_type_network">无线连接</string>
   <string name="main_device_type_link">有线连接</string>
+  <string name="main_menu">菜单</string>
+  <string name="main_menu_settings">设置</string>
+  <string name="home_subtitle">局域网镜像 · 录像副监视器</string>
+  <string name="home_device_count">%1$d 台设备</string>
+  <string name="home_select_device_title">选择设备</string>
+  <string name="home_select_device_hint">从左侧列表选择设备以连接或管理</string>
+  <string name="home_connect">连接</string>
+  <string name="home_selected">已选中</string>
+
+  <!-- 连接预设 -->
+  <string name="set_presets">连接预设</string>
+  <string name="set_presets_detail">管理普通远程、摄像头监控、单应用等镜像配置</string>
+  <string name="preset_title">连接预设</string>
+  <string name="preset_subtitle">屏幕 / 相机 / 单应用投屏配置模板</string>
+  <string name="preset_default_hint">默认预设会填充并关联新建设备。在设备页「应用预设」会写入并关联；管理页「应用预设」仅本次连接。修改预设时会询问是否更新已关联设备。</string>
+  <string name="preset_create">新建预设</string>
+  <string name="preset_edit">编辑预设</string>
+  <string name="preset_save">保存</string>
+  <string name="preset_name">预设名称</string>
+  <string name="preset_name_required">名称不能为空</string>
+  <string name="preset_new_name">自定义预设</string>
+  <string name="preset_stream_section">画面与会话选项</string>
+  <string name="preset_builtin_normal">普通远程</string>
+  <string name="preset_builtin_camera">摄像头监控</string>
+  <string name="preset_builtin_single_app">单应用投屏</string>
+  <string name="preset_badge_default">默认</string>
+  <string name="preset_badge_builtin">内置</string>
+  <string name="preset_set_default">设为默认</string>
+  <string name="preset_duplicate">复制</string>
+  <string name="preset_copy_suffix">（副本）</string>
+  <string name="preset_delete">删除</string>
+  <string name="preset_delete_title">删除预设？</string>
+  <string name="preset_delete_message">确定删除「%1$s」？此操作不可撤销。</string>
+  <string name="preset_reset">恢复默认</string>
+  <string name="preset_reset_title">恢复内置预设？</string>
+  <string name="preset_reset_message">将此内置预设恢复为出厂选项。内置预设无法永久删除。</string>
+  <string name="preset_reset_done">已恢复内置预设</string>
+  <string name="preset_builtin_edit_hint">内置预设可编辑；在列表中点「恢复默认」可还原出厂值。</string>
+  <string name="preset_apply_section">应用预设</string>
+  <string name="preset_apply_device_hint">将选项复制到本设备并关联该预设。手动改动画面相关选项会解除关联（设备保留你改过的值）。需点保存才会写入。</string>
+  <string name="preset_apply">应用预设</string>
+  <string name="preset_applied">已应用「%1$s」</string>
+  <string name="preset_picker_hint">选择要应用的预设</string>
+  <string name="preset_link_status_linked">已关联：%1$s</string>
+  <string name="preset_link_status_custom">自定义（未关联预设）</string>
+  <string name="preset_detach">解除预设关联</string>
+  <string name="preset_detached">已解除关联 — 本设备画面选项现为自定义</string>
+  <string name="preset_update_linked_title">更新已关联设备？</string>
+  <string name="preset_update_linked_message">是否用新选项更新仍关联「%2$s」的 %1$d 台设备？已解除关联/自定义的设备不会被改动。</string>
+  <string name="preset_update_linked_confirm">更新设备</string>
+  <string name="preset_update_linked_keep">保持设备不变</string>
+  <string name="preset_linked_updated">已更新 %1$d 台设备</string>
+  <string name="preset_linked_count_hint">当前有 %1$d 台已保存设备关联此预设。保存时可选择是否同步更新。</string>
+  <string name="preset_video_source_detail">屏幕镜像，或远程相机（需 Android 12+）</string>
+  <string name="preset_camera_facing_detail">视频源为相机时的默认前后置</string>
+  <string name="preset_start_app_hint">可留空作为模板；在设备页或管理里再选包名</string>
+  <string name="preset_virtual_width">宽（0=默认）</string>
+  <string name="preset_virtual_height">高（0=默认）</string>
+  <string name="manage_apply_preset">应用预设</string>
+  <string name="manage_apply_preset_detail">仅本次连接，不改写已保存配置，也不改变预设关联</string>
+
+  <!-- 错误日志 -->
+  <string name="error_log_title">错误日志</string>
+  <string name="error_log_back">返回</string>
+  <string name="error_log_refresh">刷新</string>
+  <string name="error_log_copy">复制</string>
+  <string name="error_log_share">分享</string>
+  <string name="error_log_clear">清空</string>
+  <string name="error_log_clear_title">清空错误日志？</string>
+  <string name="error_log_clear_message">将永久删除本机保存的全部错误日志。</string>
+  <string name="error_log_cleared">已清空</string>
+  <string name="error_log_copied">已复制到剪贴板</string>
+  <string name="error_log_empty">暂无日志</string>
+  <string name="error_log_search">搜索</string>
+  <string name="error_log_search_hint">标签、消息、堆栈…</string>
+  <string name="error_log_filter_all">全部</string>
+  <string name="error_log_filter_error">错误</string>
+  <string name="error_log_filter_warn">警告</string>
+  <string name="error_log_count">显示 %1$d / %2$d</string>
+  <string name="error_log_selected">已选</string>
+  <string name="error_log_tap_select">选择</string>
 
   <!-- 设置页面 -->
+  <string name="set_title">设置</string>
+  <string name="set_subtitle">预设、连接、语言与诊断</string>
+  <string name="set_back">返回</string>
+  <string name="set_section_connection">连接</string>
+  <string name="set_section_general">通用</string>
+  <string name="set_section_diagnostics">诊断</string>
+  <string name="set_section_about">关于</string>
+  <string name="set_section_connection_detail">预设、本机 IP 与 ADB 密钥</string>
+  <string name="set_section_general_detail">语言与应用偏好</string>
+  <string name="set_section_diagnostics_detail">错误日志与排查</string>
+  <string name="set_section_about_detail">版本与项目主页</string>
   <string name="set_other_custom_key">自定义密钥</string>
+  <string name="set_other_custom_key_detail">查看或替换本机 ADB 密钥对</string>
   <string name="set_other_reset_key">重置密钥</string>
-  <string name="set_other_ip">查看本机IP</string>
-  <string name="set_other_locale">语言切换(中文/English)</string>
+  <string name="set_other_reset_key_detail">生成新密钥并丢弃当前密钥</string>
+  <string name="set_other_ip">查看本机 IP</string>
+  <string name="set_other_ip_detail">显示本机 IPv4 / IPv6 地址</string>
+  <string name="set_other_locale">语言切换（中文 / English）</string>
+  <string name="set_other_locale_detail">切换应用语言，可能需要重启</string>
+  <string name="set_other_error_log">错误日志</string>
+  <string name="set_other_error_log_detail">浏览、筛选、复制或分享本机错误日志</string>
   <string name="set_about_website">项目主页</string>
+  <string name="set_about_website_detail">打开 EasyControlNext GitHub 仓库</string>
   <string name="set_about_privacy">隐私政策</string>
-  <string name="set_about_version">版本: </string>
+  <string name="set_about_version">版本</string>
 
   <!-- 查看IP地址页面 -->
   <string name="ip_ipv4">IPv4(点击复制)</string>
@@ -31,14 +130,60 @@
   <string name="adb_key_button">保存</string>
 
   <!-- 设备添加页面 -->
+  <string name="device_editor_title_add">添加设备</string>
+  <string name="device_editor_title_edit">编辑设备</string>
+  <string name="device_editor_subtitle">配对一次，之后可直接连接</string>
+  <string name="device_editor_action_pair">仅配对（手动码）</string>
+  <string name="device_editor_action_save">保存</string>
+  <string name="device_editor_action_save_connect">保存并连接</string>
+  <string name="device_editor_section_basic">连接</string>
+  <string name="device_editor_section_pairing">无线配对</string>
+  <string name="device_editor_section_preset">应用预设</string>
+  <string name="device_editor_section_video">画面与参数</string>
+  <string name="device_editor_section_on_connect">连接时操作</string>
+  <string name="device_editor_section_on_running">运行时操作</string>
+  <string name="device_editor_section_on_close">断开时操作</string>
+  <string name="device_editor_advanced_hint">对应原版易控全部设备选项</string>
   <string name="device_uuid">点击复制设备ID</string>
   <string name="device_name">设备名称</string>
   <string name="device_name_hint">不可为空</string>
   <string name="device_address">地址</string>
   <string name="device_scan_device_list">找到以下地址(点击填充)</string>
   <string name="device_address_hint">支持IPv4/v6地址、域名</string>
-  <string name="device_start_app">单应用投屏</string>
-  <string name="device_start_app_hint">为空则镜像投屏</string>
+  <string name="device_start_app">单应用投屏（虚拟屏）</string>
+  <string name="device_start_app_hint">填包名；空=整屏镜像。需被控端 Android 11+</string>
+  <string name="device_pick_app">选择应用</string>
+  <string name="device_pick_app_refresh">刷新</string>
+  <string name="device_pick_app_search">搜索应用</string>
+  <string name="device_pick_app_include_system">包含系统应用</string>
+  <string name="device_pick_app_manual">手动输入包名</string>
+  <string name="device_pick_app_need_adb">先填写 IP 与连接端口并确保已配对</string>
+  <string name="device_pick_app_empty">未获取到应用</string>
+  <string name="device_pick_app_loading">正在拉取应用列表…</string>
+  <string name="device_video_source">视频源</string>
+  <string name="device_video_source_display">屏幕</string>
+  <string name="device_video_source_camera">相机（需 Android 12+）</string>
+  <string name="device_camera_facing">摄像头</string>
+  <string name="device_camera_facing_back">后置</string>
+  <string name="device_camera_facing_front">前置</string>
+  <string name="device_virtual_size">虚拟屏分辨率（可选）</string>
+  <string name="device_virtual_dpi">虚拟屏 DPI（0=默认）</string>
+  <string name="toast_camera_android12">相机投屏需要被控端 Android 12+</string>
+  <string name="toast_camera_failed">相机投屏失败：%1$s</string>
+  <string name="toast_virtual_display_android11">单应用虚拟屏需要被控端 Android 11+</string>
+
+  <!-- 设备管理（本次连接） -->
+  <string name="manage_title">管理</string>
+  <string name="manage_section_session">仅本次连接</string>
+  <string name="manage_section_session_hint">不会改写已保存的设备配置</string>
+  <string name="manage_temp_app">临时使用某个 App</string>
+  <string name="manage_temp_app_detail">选择应用后，以虚拟屏单应用方式连接本次会话</string>
+  <string name="manage_temp_camera">使用相机</string>
+  <string name="manage_temp_camera_detail">本次连接使用被控端相机画面（需 Android 12+）</string>
+  <string name="manage_camera_facing_title">本次连接的摄像头</string>
+  <string name="manage_section_device">设备</string>
+  <string name="manage_edit">编辑</string>
+  <string name="manage_delete">删除</string>
   <string name="device_adb_port">ADB 端口</string>
   <string name="device_server_port">服务端口</string>
 
@@ -88,6 +233,12 @@
   <string name="device_max_video_bit_detail">码率越大视频损失越小体积越大，建议设置为4，过高会导致延迟增加</string>
   <string name="device_use_h265">使用H265</string>
   <string name="device_use_h265_detail">使用H265，视频体积小延迟低，若画面异常可尝试关闭</string>
+  <string name="device_hevc_profile">HEVC 规格</string>
+  <string name="device_hevc_profile_detail">H.265 位深。多数场景用 Main（8-bit）即可；Main10 需双方设备都支持。</string>
+  <string name="device_hevc_profile_auto">自动（可用则 Main10）</string>
+  <string name="device_hevc_profile_main">Main（8-bit）</string>
+  <string name="device_hevc_profile_main10">Main10（10-bit）</string>
+  <string name="toast_hevc_main10_fallback">当前不支持 Main10，已回退到 Main（8-bit）</string>
   <string name="device_connect_on_start">软件启动时打开</string>
   <string name="device_connect_on_start_detail">软件启动时自动连接该设备，可以设置多个设备自启动</string>
 
@@ -102,7 +253,7 @@
   <string name="set_device_button_delete">删除</string>
 
   <!-- 加载中模块 -->
-  <string name="loading_text">加加加加载中</string>
+  <string name="loading_text">加载中</string>
 
   <!-- 提示文本 -->
   <string name="toast_change_locale">Ok, you may need to restart the APP</string>

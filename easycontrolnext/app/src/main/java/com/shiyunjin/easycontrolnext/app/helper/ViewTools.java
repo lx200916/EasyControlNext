@@ -28,6 +28,7 @@ import com.shiyunjin.easycontrolnext.app.databinding.ItemTextBinding;
 import com.shiyunjin.easycontrolnext.app.databinding.ModuleDialogBinding;
 import com.shiyunjin.easycontrolnext.app.entity.AppData;
 import com.shiyunjin.easycontrolnext.app.entity.MyInterface;
+import com.shiyunjin.easycontrolnext.app.ui.LoadingComponentsKt;
 
 public class ViewTools {
   // 设置全面屏
@@ -54,22 +55,9 @@ public class ViewTools {
     resources.updateConfiguration(config, resources.getDisplayMetrics());
   }
 
-  // 设置状态栏导航栏颜色
+  // 设置状态栏导航栏颜色（与 Compose SoftGrayBg / Theme.EasyControl 对齐，避免黑白闪烁）
   public static void setStatusAndNavBar(Activity context) {
-    // 导航栏
-    context.getWindow().setNavigationBarColor(context.getResources().getColor(R.color.background));
-    // 状态栏
-    context.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
-    context.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-    context.getWindow().setStatusBarColor(context.getResources().getColor(R.color.background));
-    if ((context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) != Configuration.UI_MODE_NIGHT_YES)
-      context.getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
-    // 设置异形屏
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-      WindowManager.LayoutParams lp = context.getWindow().getAttributes();
-      lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-      context.getWindow().setAttributes(lp);
-    }
+    ComposeActivityBars.paintLegacy(context);
   }
 
   // 创建弹窗
@@ -85,10 +73,22 @@ public class ViewTools {
     return dialog;
   }
 
-  // 创建Client加载框
+  // 创建 M3 ContainedLoadingIndicator 加载框（Compose 形态动画 + 可选文案）
   public static Pair<ItemLoadingBinding, Dialog> createLoading(Context context) {
     ItemLoadingBinding loadingView = ItemLoadingBinding.inflate(LayoutInflater.from(context));
-    return new Pair<>(loadingView, createDialog(context, false, loadingView.getRoot()));
+    AlertDialog.Builder builder = new AlertDialog.Builder(context);
+    builder.setCancelable(false);
+    builder.setView(loadingView.getRoot());
+    Dialog dialog = builder.create();
+    dialog.setCanceledOnTouchOutside(false);
+    if (dialog.getWindow() != null) {
+      dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+      dialog.getWindow().setDimAmount(0.35f);
+    }
+    // ComposeView needs ViewTree owners; platform AlertDialog does not provide them.
+    // Install after dialog creation so decorView can be bound too.
+    LoadingComponentsKt.installM3ContainedLoadingIndicator(loadingView.indicator, dialog);
+    return new Pair<>(loadingView, dialog);
   }
 
   // 创建纯文本卡片

@@ -1,0 +1,23 @@
+/**
+ * EXAMPLE — production wrapper lives at entry/src/main/ets/native/AdbCore.ets.
+ * Assemble runs scripts/build_native_ohos.sh via entry/hvigorfile.ts before
+ * packaging entry/libs/arm64-v8a/libadb_core.so (gitignored).
+ *
+ *   import adbCore from 'libadb_core.so';
+ *   const ver = adbCore.nativeVersion();
+ */
+
+export interface AdbCoreNative {
+  nativeVersion: () => string;
+  nativeCapabilities: () => string;
+  roundTripBytes: (input: ArrayBuffer) => ArrayBuffer;
+  encodeAdbConnect: () => ArrayBuffer;
+  encodeAdbOkay: (localId: number, remoteId: number) => ArrayBuffer;
+  encodeAdbOpen: (localId: number, dest: string) => ArrayBuffer;
+  parseVideoStreamHeader: (input: ArrayBuffer) => Object;
+  parseVideoAccessUnit: (input: ArrayBuffer) => Object;
+  encodeControlKeepAlive: () => ArrayBuffer;
+  encodeControlTouch: (action: number, pointerId: number, x: number, y: number,
+    offsetTime: number) => ArrayBuffer;
+  encodeControlClipboard: (text: string) => ArrayBuffer;
+}

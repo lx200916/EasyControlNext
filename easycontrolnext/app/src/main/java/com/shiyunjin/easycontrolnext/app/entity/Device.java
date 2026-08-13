@@ -10,7 +10,20 @@ public class Device {
   public String name;
   public String address = "";
   public String startApp = "";
-  public int adbPort = 5555;
+  /**
+   * Linked connection preset id, or empty when fully custom / detached.
+   * Concrete stream fields below are always what connect uses; presetId only tracks linkage.
+   */
+  public String presetId = "";
+  /** display | camera */
+  public String videoSource = "display";
+  /** back | front */
+  public String cameraFacing = "back";
+  /** 0 = use physical display defaults for virtual display */
+  public int virtualWidth = 0;
+  public int virtualHeight = 0;
+  public int virtualDpi = 0;
+  public int adbPort = 0; // 0 = unset; Android 11+ wireless debug uses a dynamic port
   public int serverPort = 25166;
 
   public int pairPort = 0;
@@ -21,6 +34,11 @@ public class Device {
   public int maxFps = 60;
   public int maxVideoBit = 4;
   public boolean useH265 = true;
+  /**
+   * HEVC bit-depth preference when {@link #useH265} is true:
+   * {@code auto} (Main10 if both sides can), {@code main} (8-bit, default), {@code main10} (10-bit).
+   */
+  public String hevcProfile = "main";
   public boolean connectOnStart = false;
   public boolean customResolutionOnConnect = false;
   public boolean wakeOnConnect = true;
@@ -45,6 +63,12 @@ public class Device {
   public int smallLengthLan = 800;
   public int miniY = 200;
 
+  /**
+   * Connect-time override only: do not persist this instance to the DB on close.
+   * Not stored in SQLite.
+   */
+  public transient boolean sessionOnly = false;
+
   public Device(String uuid, int type) {
     this.uuid = uuid;
     this.type = type;
@@ -60,7 +84,7 @@ public class Device {
   }
 
   public boolean isTempDevice() {
-    return Objects.equals(name, "----");
+    return sessionOnly || Objects.equals(name, "----");
   }
 
   public Device clone(String uuid) {
@@ -68,6 +92,12 @@ public class Device {
     newDevice.name = name;
     newDevice.address = address;
     newDevice.startApp = startApp;
+    newDevice.presetId = presetId;
+    newDevice.videoSource = videoSource;
+    newDevice.cameraFacing = cameraFacing;
+    newDevice.virtualWidth = virtualWidth;
+    newDevice.virtualHeight = virtualHeight;
+    newDevice.virtualDpi = virtualDpi;
     newDevice.adbPort = adbPort;
     newDevice.serverPort = serverPort;
     newDevice.pairKey = pairKey;
@@ -78,6 +108,7 @@ public class Device {
     newDevice.maxFps = maxFps;
     newDevice.maxVideoBit = maxVideoBit;
     newDevice.useH265 = useH265;
+    newDevice.hevcProfile = hevcProfile;
     newDevice.connectOnStart = connectOnStart;
     newDevice.customResolutionOnConnect = customResolutionOnConnect;
     newDevice.wakeOnConnect = wakeOnConnect;

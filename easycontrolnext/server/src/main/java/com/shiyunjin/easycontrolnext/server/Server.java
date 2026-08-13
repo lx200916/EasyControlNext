@@ -233,6 +233,7 @@ public final class Server {
           case 2:
             Device.fallbackResolution();
             Device.fallbackScreenLightTimeout();
+            break;
           case 3:
             Runtime.getRuntime().exit(0);
             break;

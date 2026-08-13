@@ -4,16 +4,29 @@
 package com.shiyunjin.easycontrolnext.server.entity;
 
 public final class Options {
-  public static int serverPort=25166;
-  public static boolean listenerClip=true;
+  public static int serverPort = 25166;
+  public static boolean listenerClip = true;
   public static boolean isAudio = true;
   public static int maxSize = 1600;
   public static int maxVideoBit = 4000000;
   public static int maxFps = 60;
   public static boolean keepAwake = true;
   public static boolean supportH265 = true;
+  /**
+   * Client-requested HEVC profile after decode-side probe: {@code main10}, {@code main}, or {@code 0}.
+   * Omitted by old clients → treated as {@code main} when {@link #supportH265} is true (safe default).
+   */
+  public static String hevcProfile = "main";
   public static boolean supportOpus = true;
   public static String startApp = "";
+  /** display | camera */
+  public static String videoSource = "display";
+  /** back | front (used when videoSource=camera) */
+  public static String cameraFacing = "back";
+  /** 0 = use physical display size / density */
+  public static int virtualWidth = 0;
+  public static int virtualHeight = 0;
+  public static int virtualDpi = 0;
 
   public static void parse(String... args) {
     for (String arg : args) {
@@ -46,14 +59,35 @@ public final class Options {
         case "supportH265":
           supportH265 = Integer.parseInt(value) == 1;
           break;
+        case "hevcProfile":
+          hevcProfile = value == null || value.isEmpty() ? "main" : value.trim().toLowerCase();
+          break;
         case "supportOpus":
           supportOpus = Integer.parseInt(value) == 1;
           break;
         case "startApp":
           startApp = value;
           break;
+        case "videoSource":
+          videoSource = value == null || value.isEmpty() ? "display" : value;
+          break;
+        case "cameraFacing":
+          cameraFacing = value == null || value.isEmpty() ? "back" : value;
+          break;
+        case "virtualWidth":
+          virtualWidth = Integer.parseInt(value);
+          break;
+        case "virtualHeight":
+          virtualHeight = Integer.parseInt(value);
+          break;
+        case "virtualDpi":
+          virtualDpi = Integer.parseInt(value);
+          break;
       }
     }
   }
-}
 
+  public static boolean isCameraSource() {
+    return "camera".equalsIgnoreCase(videoSource);
+  }
+}

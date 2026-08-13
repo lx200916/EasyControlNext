@@ -20,7 +20,8 @@
     android:layout_gravity="top|center_horizontal"
     android:layout_margin="6dp"
     android:background="@drawable/background_cron"
-    android:elevation="4dp"
+    android:backgroundTint="#F21C1C1E"
+    android:elevation="8dp"
     android:orientation="vertical">
 
     <FrameLayout
@@ -31,10 +32,10 @@
     <LinearLayout
       android:id="@+id/nav_bar"
       android:layout_width="match_parent"
-      android:layout_height="35dp"
+      android:layout_height="40dp"
       android:orientation="horizontal"
-      android:paddingStart="20dp"
-      android:paddingEnd="20dp"
+      android:paddingStart="16dp"
+      android:paddingEnd="16dp"
       tools:ignore="RtlSymmetry">
 
       <ImageView
@@ -43,9 +44,9 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:focusable="false"
-        android:padding="4dp"
+        android:padding="6dp"
         android:src="@drawable/caret_left"
-        android:tint="@color/onCardBackground" />
+        android:tint="#E8EAED" />
 
       <ImageView
         android:id="@+id/button_home"
@@ -53,9 +54,9 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:focusable="false"
-        android:padding="4dp"
+        android:padding="6dp"
         android:src="@drawable/o"
-        android:tint="@color/onCardBackground" />
+        android:tint="#E8EAED" />
 
       <ImageView
         android:id="@+id/button_switch"
@@ -63,10 +64,9 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:focusable="false"
-        android:padding="4dp"
+        android:padding="6dp"
         android:src="@drawable/square"
-        android:tint="@color/onCardBackground" />
-
+        android:tint="#E8EAED" />
     </LinearLayout>
   </LinearLayout>
 
@@ -75,32 +75,33 @@
     android:layout_width="120dp"
     android:layout_height="30dp"
     android:layout_gravity="top|center_horizontal"
-    android:elevation="6dp">
+    android:elevation="10dp">
 
     <View
-      android:layout_width="70dp"
-      android:layout_height="8dp"
+      android:layout_width="56dp"
+      android:layout_height="5dp"
       android:layout_gravity="center_horizontal|bottom"
       android:layout_marginBottom="8dp"
       android:background="@drawable/background_cron"
-      android:backgroundTint="@color/clientBar"
+      android:backgroundTint="#3A70FC"
       android:focusable="false" />
   </FrameLayout>
 
   <LinearLayout
     android:id="@+id/bar_view"
-    android:layout_width="wrap_content"
+    android:layout_width="200dp"
     android:layout_height="wrap_content"
     android:layout_gravity="top|center_horizontal"
-    android:layout_marginTop="35dp"
+    android:layout_marginTop="34dp"
     android:background="@drawable/background_cron"
-    android:elevation="6dp"
+    android:backgroundTint="#F21C1C1E"
+    android:elevation="10dp"
     android:orientation="vertical"
     android:padding="8dp">
 
     <LinearLayout
-      android:layout_width="140dp"
-      android:layout_height="35dp"
+      android:layout_width="match_parent"
+      android:layout_height="40dp"
       android:orientation="horizontal">
 
       <ImageView
@@ -109,9 +110,9 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:focusable="false"
-        android:padding="4dp"
+        android:padding="6dp"
         android:src="@drawable/share"
-        android:tint="@color/onCardBackground" />
+        android:tint="#E8EAED" />
 
       <ImageView
         android:id="@+id/button_mini"
@@ -119,9 +120,9 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:focusable="false"
-        android:padding="4dp"
+        android:padding="6dp"
         android:src="@drawable/minus"
-        android:tint="@color/onCardBackground" />
+        android:tint="#E8EAED" />
 
       <ImageView
         android:id="@+id/button_full"
@@ -129,9 +130,9 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:focusable="false"
-        android:padding="4dp"
+        android:padding="6dp"
         android:src="@drawable/expand"
-        android:tint="@color/onCardBackground" />
+        android:tint="#8AB4F8" />
 
       <ImageView
         android:id="@+id/button_close"
@@ -139,14 +140,14 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:focusable="false"
-        android:padding="4dp"
+        android:padding="6dp"
         android:src="@drawable/x"
-        android:tint="@color/alert" />
+        android:tint="#F2B8B5" />
     </LinearLayout>
 
     <LinearLayout
-      android:layout_width="140dp"
-      android:layout_height="35dp"
+      android:layout_width="match_parent"
+      android:layout_height="40dp"
       android:orientation="horizontal">
 
       <ImageView
@@ -155,9 +156,9 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:focusable="false"
-        android:padding="4dp"
+        android:padding="6dp"
         android:src="@drawable/horizontal_rotate"
-        android:tint="@color/onCardBackground" />
+        android:tint="#E8EAED" />
 
       <ImageView
         android:id="@+id/button_nav_bar"
@@ -165,9 +166,9 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:focusable="false"
-        android:padding="4dp"
+        android:padding="6dp"
         android:src="@drawable/not_equal"
-        android:tint="@color/onCardBackground" />
+        android:tint="#E8EAED" />
 
       <ImageView
         android:id="@+id/button_power"
@@ -175,9 +176,9 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:focusable="false"
-        android:padding="4dp"
+        android:padding="6dp"
         android:src="@drawable/power"
-        android:tint="@color/onCardBackground" />
+        android:tint="#E8EAED" />
 
       <ImageView
         android:id="@+id/button_light"
@@ -185,11 +186,10 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:focusable="false"
-        android:padding="4dp"
+        android:padding="6dp"
         android:src="@drawable/lightbulb_off"
-        android:tint="@color/onCardBackground" />
+        android:tint="#E8EAED" />
     </LinearLayout>
-
   </LinearLayout>
 
   <View

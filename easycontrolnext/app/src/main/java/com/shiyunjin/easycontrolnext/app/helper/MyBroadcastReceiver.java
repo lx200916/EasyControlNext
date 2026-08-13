@@ -18,6 +18,7 @@ import com.shiyunjin.easycontrolnext.app.client.Client;
 import com.shiyunjin.easycontrolnext.app.client.tools.AdbTools;
 import com.shiyunjin.easycontrolnext.app.entity.AppData;
 import com.shiyunjin.easycontrolnext.app.entity.Device;
+import com.shiyunjin.easycontrolnext.app.ui.DeviceListStore;
 
 public class MyBroadcastReceiver extends BroadcastReceiver {
 
@@ -26,8 +27,6 @@ public class MyBroadcastReceiver extends BroadcastReceiver {
   public static final String ACTION_UPDATE_DEVICE_LIST = "com.shiyunjin.easycontrolnext.app.UPDATE_DEVICE_LIST";
   public static final String ACTION_CONTROL = "com.shiyunjin.easycontrolnext.app.CONTROL";
   private static final String ACTION_SCREEN_OFF = "android.intent.action.SCREEN_OFF";
-
-  private DeviceListAdapter deviceListAdapter;
 
   // 注册广播
   @SuppressLint("UnspecifiedRegisterReceiverFlag")
@@ -54,13 +53,8 @@ public class MyBroadcastReceiver extends BroadcastReceiver {
     if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) AppData.uiHandler.postDelayed(() -> onConnectUsb(context, intent), 1000);
     else if (ACTION_UPDATE_USB.equals(action) || ACTION_USB_PERMISSION.equals(action) || UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) updateUSB();
     else if (ACTION_SCREEN_OFF.equals(action)) handleScreenOff();
-    else if (ACTION_UPDATE_DEVICE_LIST.equals(action)) deviceListAdapter.update();
+    else if (ACTION_UPDATE_DEVICE_LIST.equals(action)) DeviceListStore.refresh();
     else if (ACTION_CONTROL.equals(action)) handleControl(intent);
-  }
-
-
-  public void setDeviceListAdapter(DeviceListAdapter deviceListAdapter) {
-    this.deviceListAdapter = deviceListAdapter;
   }
 
   private void handleScreenOff() {
@@ -111,7 +105,7 @@ public class MyBroadcastReceiver extends BroadcastReceiver {
         AdbTools.usbDevicesList.put(uuid, usbDevice);
       }
     }
-    deviceListAdapter.update();
+    DeviceListStore.refresh();
   }
 
   public synchronized void resetUSB() {

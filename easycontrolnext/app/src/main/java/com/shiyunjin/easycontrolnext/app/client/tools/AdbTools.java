@@ -25,6 +25,7 @@ import com.shiyunjin.easycontrolnext.app.adb.AdbConnectionManager;
 import com.shiyunjin.easycontrolnext.app.adb.AdbServiceDiscovery;
 import com.shiyunjin.easycontrolnext.app.entity.AppData;
 import com.shiyunjin.easycontrolnext.app.entity.Device;
+import com.shiyunjin.easycontrolnext.app.entity.Setting;
 import com.shiyunjin.easycontrolnext.app.entity.MyInterface;
 import com.shiyunjin.easycontrolnext.app.helper.PublicTools;
 
@@ -125,8 +126,12 @@ public class AdbTools {
     manager.setThrowOnUnauthorised(true);
 
     String ip = PublicTools.getIp(device.address);
+    int probeTimeoutMs = AppData.setting != null
+        ? AppData.setting.getReachabilityTimeoutMs()
+        : Setting.REACHABILITY_TIMEOUT_DEFAULT_MS;
     String pairKey = normalizePairCode(device.pairKey);
     if (device.pairPort > 0 && !pairKey.isEmpty()) {
+      requireReachable(ip, device.pairPort, probeTimeoutMs);
       try {
         manager.pair(ip, device.pairPort, pairKey);
         device.pairPort = 0;
@@ -144,6 +149,8 @@ public class AdbTools {
     if (connectPort <= 0) {
       throw new Exception("连接端口无效。请填写无线调试页面顶部的 IP:端口 中的端口（通常不是 5555）。");
     }
+
+    requireReachable(ip, connectPort, probeTimeoutMs);
 
     try {
       manager.connect(ip, connectPort);
@@ -179,6 +186,18 @@ public class AdbTools {
           + "。Android 11+ 请用无线调试主页顶部的端口，不要用配对弹窗端口，也不要默认填 5555。", e);
     }
     return new Adb(manager);
+  }
+
+  private static void requireReachable(String ip, int port, int timeoutMs) throws Exception {
+    try {
+      PublicTools.probeTcpReachable(ip, port, timeoutMs);
+    } catch (Exception e) {
+      if (Thread.currentThread().isInterrupted()) {
+        throw e;
+      }
+      throw new Exception(AppData.applicationContext.getString(
+          R.string.toast_host_unreachable, ip, port, timeoutMs), e);
+    }
   }
 
   private static String rootMessage(Throwable e) {

@@ -32,6 +32,7 @@ import com.shiyunjin.easycontrolnext.app.R;
 import com.shiyunjin.easycontrolnext.app.adb.AdbBase64;
 import com.shiyunjin.easycontrolnext.app.adb.AdbKeyPair;
 import com.shiyunjin.easycontrolnext.app.entity.AppData;
+import com.shiyunjin.easycontrolnext.app.entity.Setting;
 
 public class PublicTools {
 
@@ -47,6 +48,30 @@ public class PublicTools {
       if (address.contains("*netAddress*")) address = address.replace("*netAddress*", getNetAddress());
     } else address = InetAddress.getByName(address).getHostAddress();
     return address;
+  }
+
+  /**
+   * Lightweight TCP connect probe. Call off the main thread.
+   * Uses a short connect timeout so unreachable hosts fail fast.
+   */
+  public static void probeTcpReachable(String host, int port, int timeoutMs) throws IOException {
+    if (host == null || host.trim().isEmpty()) {
+      throw new IOException("empty host");
+    }
+    if (port <= 0 || port > 65535) {
+      throw new IOException("invalid port");
+    }
+    int timeout = Setting.clampReachabilityTimeoutMs(timeoutMs);
+    Socket socket = new Socket();
+    try {
+      InetAddress address = InetAddress.getByName(host);
+      socket.connect(new InetSocketAddress(address, port), timeout);
+    } finally {
+      try {
+        socket.close();
+      } catch (Exception ignored) {
+      }
+    }
   }
 
   // 获取IP地址

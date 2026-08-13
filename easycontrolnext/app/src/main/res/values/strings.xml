@@ -101,7 +101,7 @@
   <string name="set_section_general">General</string>
   <string name="set_section_diagnostics">Diagnostics</string>
   <string name="set_section_about">About</string>
-  <string name="set_section_connection_detail">Presets, IP addresses, and ADB keys</string>
+  <string name="set_section_connection_detail">Presets, IP addresses, probe timeout, and ADB keys</string>
   <string name="set_section_general_detail">Language and app preferences</string>
   <string name="set_section_diagnostics_detail">Error logs and troubleshooting</string>
   <string name="set_section_about_detail">Version and project homepage</string>
@@ -111,6 +111,9 @@
   <string name="set_other_reset_key_detail">Generate a new key pair and discard the current one</string>
   <string name="set_other_ip">IP addresses</string>
   <string name="set_other_ip_detail">Show this device\'s IPv4 / IPv6 addresses</string>
+  <string name="set_reachability_timeout">Pre-connect probe timeout</string>
+  <string name="set_reachability_timeout_detail">How long to wait when checking whether the device IP and port are reachable. Timed-out probes fail immediately instead of hanging.</string>
+  <string name="set_reachability_timeout_option">%1$d ms</string>
   <string name="set_other_locale">Change language (中文 / English)</string>
   <string name="set_other_locale_detail">Toggle app language; restart may be required</string>
   <string name="set_other_error_log">Error logs</string>
@@ -265,6 +268,7 @@
   <string name="toast_no_browser">No default browser</string>
   <string name="toast_address_error">Address format error</string>
   <string name="toast_timeout">Timeout</string>
+  <string name="toast_host_unreachable">Unreachable %1$s:%2$d (no response within %3$d ms). Check the IP, port, and that the device is on the same network.</string>
   <string name="toast_connect_server">Failed to connect</string>
   <string name="toast_stream_closed">Disconnected</string>
   <string name="toast_float_per">Need floating window permission</string>

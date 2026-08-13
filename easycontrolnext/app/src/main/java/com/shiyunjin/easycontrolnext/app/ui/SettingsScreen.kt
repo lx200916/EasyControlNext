@@ -28,10 +28,12 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,6 +60,7 @@ import com.shiyunjin.easycontrolnext.app.BuildConfig
 import com.shiyunjin.easycontrolnext.app.IpActivity
 import com.shiyunjin.easycontrolnext.app.R
 import com.shiyunjin.easycontrolnext.app.entity.AppData
+import com.shiyunjin.easycontrolnext.app.entity.Setting
 import com.shiyunjin.easycontrolnext.app.helper.PublicTools
 import com.shiyunjin.easycontrolnext.app.ui.theme.AccentBlue
 
@@ -366,6 +370,8 @@ private fun SettingsConnectionContent(
     onClick = onOpenPresets,
   )
   SettingsDivider()
+  SettingsReachabilityTimeoutRow()
+  SettingsDivider()
   SettingsNavRow(
     icon = Icons.Default.Wifi,
     title = stringResource(R.string.set_other_ip),
@@ -386,6 +392,53 @@ private fun SettingsConnectionContent(
     detail = stringResource(R.string.set_other_reset_key_detail),
     onClick = onResetKey,
   )
+}
+
+@Composable
+private fun SettingsReachabilityTimeoutRow() {
+  var selectedMs by remember {
+    mutableIntStateOf(AppData.setting.reachabilityTimeoutMs)
+  }
+  Row(
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(vertical = 10.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Icon(
+      imageVector = Icons.Default.Timer,
+      contentDescription = null,
+      tint = AccentBlue,
+      modifier = Modifier.size(22.dp),
+    )
+    Spacer(modifier = Modifier.width(14.dp))
+    Column(modifier = Modifier.weight(1f)) {
+      Text(
+        stringResource(R.string.set_reachability_timeout),
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+      )
+      Spacer(modifier = Modifier.height(2.dp))
+      Text(
+        stringResource(R.string.set_reachability_timeout_detail),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      Spacer(modifier = Modifier.height(8.dp))
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Setting.REACHABILITY_TIMEOUT_OPTIONS_MS.forEach { ms ->
+          FilterChip(
+            selected = selectedMs == ms,
+            onClick = {
+              selectedMs = ms
+              AppData.setting.reachabilityTimeoutMs = ms
+            },
+            label = { Text(stringResource(R.string.set_reachability_timeout_option, ms)) },
+          )
+        }
+      }
+    }
+  }
 }
 
 @Composable

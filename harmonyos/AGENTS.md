@@ -10,7 +10,7 @@ EasyControlNext 鸿蒙端是 **控制器（controller）**，不是受控端。
 
 | | |
 |---|---|
-| This project | `harmonyos/` — HarmonyOS NEXT Stage app, bundleName `com.shiyunjin.easycontrolnext` |
+| This project | `harmonyos/` — HarmonyOS NEXT Stage app, bundleName `fun.saltedfish.easycontrol.next` |
 | Android peer | `../easycontrolnext/` — Gradle / Kotlin / Jetpack Compose |
 | Controlled device | Still **Android**. Reuse existing `server` JAR (`scripts/copy_server_jar.sh` → rawfile) |
 | Native stack | Rust `protocol` + `adb_client` + ohos-rs cdylib `libadb_core.so` (NAPI). No handwritten C++ NAPI |

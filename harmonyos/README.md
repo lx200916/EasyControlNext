@@ -6,7 +6,7 @@
 |---|---|
 | 本工程（鸿蒙） | `harmonyos/` |
 | Android 工程 | `../easycontrolnext/` |
-| bundleName | `com.shiyunjin.easycontrolnext` |
+| bundleName | `fun.saltedfish.easycontrol.next` |
 | 生产基线 | HarmonyOS 6.1.1 / API 24 |
 
 产品能力与仓库总览见 [根目录 README](../README.md)。移植进度见 [`IMPLEMENTATION_PLAN.md`](./IMPLEMENTATION_PLAN.md)。Always-on 约定见 [`AGENTS.md`](./AGENTS.md)。

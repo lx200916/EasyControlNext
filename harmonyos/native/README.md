@@ -140,7 +140,7 @@ Session UX: Connect → try live (rawfile jar + Gate C RSA) → OH_VideoDecoder 
 
 hdc -t 127.0.0.1:5559 file send entry/build/default/outputs/default/entry-default-signed.hap /data/local/tmp/entry.hap
 hdc -t 127.0.0.1:5559 shell bm install -p /data/local/tmp/entry.hap
-hdc -t 127.0.0.1:5559 shell aa start -a EntryAbility -b com.shiyunjin.easycontrolnext -m entry
+hdc -t 127.0.0.1:5559 shell aa start -a EntryAbility -b fun.saltedfish.easycontrol.next -m entry
 ```
 
 **Network note:** Foldable emu may reach host gateway (`10.0.2.2`) and sometimes LAN Android with high RTT; if live stalls, run HAP on a HarmonyOS device on the same LAN as the Android target, or relay ADB/server ports via the host.

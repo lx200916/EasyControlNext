@@ -419,6 +419,10 @@
       "value": "包名"
     },
     {
+      "name": "settings_homepage",
+      "value": "项目主页"
+    },
+    {
       "name": "settings_about_note",
       "value": "本应用作为控制器，连接已安装服务端的 Android 设备。"
     },

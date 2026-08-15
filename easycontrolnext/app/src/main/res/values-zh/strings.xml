@@ -22,9 +22,9 @@
 
   <!-- 连接预设 -->
   <string name="set_presets">连接预设</string>
-  <string name="set_presets_detail">管理普通远程、摄像头监控、单应用等镜像配置</string>
+  <string name="set_presets_detail">管理普通远程、摄像头监控、单应用、弱网低延迟等镜像配置</string>
   <string name="preset_title">连接预设</string>
-  <string name="preset_subtitle">屏幕 / 相机 / 单应用投屏配置模板</string>
+  <string name="preset_subtitle">屏幕 / 相机 / 单应用 / 弱网低延迟配置模板</string>
   <string name="preset_default_hint">默认预设会填充并关联新建设备。在设备页「应用预设」会写入并关联；管理页「应用预设」仅本次连接。修改预设时会询问是否更新已关联设备。</string>
   <string name="preset_create">新建预设</string>
   <string name="preset_edit">编辑预设</string>
@@ -36,6 +36,8 @@
   <string name="preset_builtin_normal">普通远程</string>
   <string name="preset_builtin_camera">摄像头监控</string>
   <string name="preset_builtin_single_app">单应用投屏</string>
+  <string name="preset_builtin_weak">弱网低延迟</string>
+  <string name="preset_builtin_weak_detail">弱网优先低延迟：1280 · 30fps · 2Mbps · HEVC Main · 关音频</string>
   <string name="preset_badge_default">默认</string>
   <string name="preset_badge_builtin">内置</string>
   <string name="preset_set_default">设为默认</string>
@@ -101,7 +103,7 @@
   <string name="set_section_general">通用</string>
   <string name="set_section_diagnostics">诊断</string>
   <string name="set_section_about">关于</string>
-  <string name="set_section_connection_detail">预设、本机 IP 与 ADB 密钥</string>
+  <string name="set_section_connection_detail">预设、本机 IP、探测超时、ADB 密钥与本机解码</string>
   <string name="set_section_general_detail">语言与应用偏好</string>
   <string name="set_section_diagnostics_detail">错误日志与排查</string>
   <string name="set_section_about_detail">版本与项目主页</string>
@@ -111,6 +113,9 @@
   <string name="set_other_reset_key_detail">生成新密钥并丢弃当前密钥</string>
   <string name="set_other_ip">查看本机 IP</string>
   <string name="set_other_ip_detail">显示本机 IPv4 / IPv6 地址</string>
+  <string name="set_reachability_timeout">连接前探测超时</string>
+  <string name="set_reachability_timeout_detail">检查目标 IP 与端口是否可达的等待时间。超时立即提示不可达，避免长时间卡住。</string>
+  <string name="set_reachability_timeout_option">%1$d 毫秒</string>
   <string name="set_other_locale">语言切换（中文 / English）</string>
   <string name="set_other_locale_detail">切换应用语言，可能需要重启</string>
   <string name="set_other_error_log">错误日志</string>
@@ -119,6 +124,22 @@
   <string name="set_about_website_detail">打开 EasyControlNext GitHub 仓库</string>
   <string name="set_about_privacy">隐私政策</string>
   <string name="set_about_version">版本</string>
+  <string name="set_decode_caps">本机硬件解码</string>
+  <string name="set_decode_caps_detail">检测本机可硬件解码的编码。选择 H.264 / H.265 规格时会参考这些能力。</string>
+  <string name="set_decode_caps_refresh">重新检测</string>
+  <string name="set_decode_caps_probing">检测中…</string>
+  <string name="set_decode_caps_supported">支持</string>
+  <string name="set_decode_caps_unsupported">不支持</string>
+  <string name="set_decode_caps_hw">硬件</string>
+  <string name="set_decode_caps_sw">仅软件</string>
+  <string name="set_decode_caps_avc">H.264 / AVC</string>
+  <string name="set_decode_caps_hevc">H.265 / HEVC</string>
+  <string name="set_decode_caps_av1">AV1</string>
+  <string name="set_decode_caps_opus">Opus</string>
+  <string name="set_decode_caps_aac">AAC</string>
+  <string name="set_decode_caps_hevc_main">Main8</string>
+  <string name="set_decode_caps_hevc_main10">Main10</string>
+  <string name="set_decode_caps_hevc_profiles">规格：%1$s</string>
 
   <!-- 查看IP地址页面 -->
   <string name="ip_ipv4">IPv4(点击复制)</string>
@@ -144,6 +165,24 @@
   <string name="device_editor_section_on_running">运行时操作</string>
   <string name="device_editor_section_on_close">断开时操作</string>
   <string name="device_editor_advanced_hint">对应原版易控全部设备选项</string>
+  <string name="device_connect_port">连接端口</string>
+  <string name="device_connect_port_placeholder">无线调试主页顶部端口</string>
+  <string name="device_connect_port_hint">不是配对弹窗端口；Android 11+ 通常也不是 5555</string>
+  <string name="qr_pair_title">二维码配对</string>
+  <string name="qr_pair_hint">被控机：开发者选项 → 无线调试 →「使用二维码配对」扫描下方二维码。二维码不含 IP 和连接端口，配对成功后会从局域网自动填写。</string>
+  <string name="qr_pair_waiting">等待被控机扫码…</string>
+  <string name="qr_pair_waiting_keep_open">等待扫码中…（保持二维码页开启）</string>
+  <string name="qr_pair_found_pairing">已发现被控机，正在配对…</string>
+  <string name="qr_pair_discovering_port">配对成功，正在查找连接端口…</string>
+  <string name="qr_pair_success_filled">二维码配对成功。已填入 %1$s:%2$d</string>
+  <string name="qr_pair_success_filled_classic">已与 %1$s 配对成功。未发现无线调试连接端口，已填入可达的 5555。若无线调试页顶部不是 5555，请改填该端口。</string>
+  <string name="qr_pair_success_need_port">已与 %1$s 配对成功。二维码不含连接端口，请到被控机「无线调试」页顶部查看 IP:端口（不是配对码弹窗里的端口）并填写。</string>
+  <string name="qr_pair_success_toast">配对成功</string>
+  <string name="qr_pair_timeout">配对超时</string>
+  <string name="qr_pair_failed">二维码配对失败</string>
+  <string name="qr_pair_close">关闭</string>
+  <string name="pair_success_filled">配对成功。已填入连接端口 %1$d</string>
+  <string name="pair_success_need_port">配对成功。请到被控机「无线调试」页顶部查看并填写连接端口（不是配对码弹窗端口）。</string>
   <string name="device_uuid">点击复制设备ID</string>
   <string name="device_name">设备名称</string>
   <string name="device_name_hint">不可为空</string>
@@ -234,7 +273,7 @@
   <string name="device_use_h265">使用H265</string>
   <string name="device_use_h265_detail">使用H265，视频体积小延迟低，若画面异常可尝试关闭</string>
   <string name="device_hevc_profile">HEVC 规格</string>
-  <string name="device_hevc_profile_detail">H.265 位深。多数场景用 Main（8-bit）即可；Main10 需双方设备都支持。</string>
+  <string name="device_hevc_profile_detail">H.265 位深。选 Main（8-bit）时即使双方都支持 Main10 也不会升级。仅在你选 Main10（或自动）且双方都支持时才用 Main10。</string>
   <string name="device_hevc_profile_auto">自动（可用则 Main10）</string>
   <string name="device_hevc_profile_main">Main（8-bit）</string>
   <string name="device_hevc_profile_main10">Main10（10-bit）</string>
@@ -264,6 +303,7 @@
   <string name="toast_no_browser">没有默认浏览器</string>
   <string name="toast_address_error">地址格式错误</string>
   <string name="toast_timeout">超时</string>
+  <string name="toast_host_unreachable">无法连接 %1$s:%2$d（%3$d 毫秒内不可达）。请确认 IP、端口正确，设备在线且与本机同一网络。</string>
   <string name="toast_connect_server">连接被控端失败</string>
   <string name="toast_stream_closed">连接断开</string>
   <string name="toast_float_per">需要悬浮窗权限</string>

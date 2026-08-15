@@ -45,6 +45,14 @@ Pairing TLS (SPAKE2 + rustls) is separate from session TLS. Live LAN pair vs And
 - Touch: `liveSessionWriteControl` on **direct** main TCP
 - Frozen lock-wallpaper with dead touch: `wakeOnConnect` sends power mode 1 → server `KEYCODE_WAKEUP` (no-op if already lit; does not unlock Keyguard). `lockOnClose` defaults **off**; when on, disconnect sends POWER off.
 
+## Audio relay
+
+Implemented (not a stub). `Device.isAudio` (default off) → server launch `isAudio=1` + `support_opus=1` → main preamble `can_audio`/`use_opus` → type-1 frames → `ohos_adec.rs` (`OH_AudioCodec` Opus/AAC @ 48 kHz stereo → `OH_AudioRenderer`). Session toolbar toggle reconnects (server encodes only when launched with `isAudio=1`). HW-only; Android 12+ on the controlled device. No AVSession / background audio.
+
+## H.264 vs H.265
+
+Default **H.265** (Android parity). First-launch background probe (`DecoderCapsCache`, after first frame, lazy `libadb_core.so`) caches `OH_VideoDecoder` HEVC. If missing, new drafts/presets prefer AVC. Session still one-shot `forceAvc` when `CreateByMime(video/hevc)` returns null. Fixture path stays AVC.
+
 ## Tab bar / safe area
 
 Home **HdsTabs** floating pill uses `safeBottomVp` as `barFloatingStyle.barBottomMargin`. Ignoring layout safe areas on real devices **pushes HdsTabs off-screen** and puts system back under the status bar (`SystemInsets.ets`). Session may still go edge-to-edge.

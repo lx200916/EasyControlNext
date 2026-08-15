@@ -52,8 +52,8 @@ Inspect `git status` / `git diff` before editing shared scaffold files.
 - Porting or rewriting the Android `server` module
 - Floating window / mini view (API 26 `floatView` optional later)
 - USB ADB via DriverExtensionAbility / USB DDK
-- Audio / H.265 until H.264 + touch are stable
 - Reproducing Android’s dual-stack `ManagerChannel` / `Ctop` bridge
+- AVSession / background audio (foreground Opus/AAC relay is implemented)
 
 ---
 
@@ -168,8 +168,8 @@ harmonyos/
 - [x] Live main/video sockets from HarmonyOS (Gate D on-device) feeding the decoder — NAPI `liveSessionStart/Status/WriteControl/Stop`; streaming `ohos_vdec::start_live_stream` + `push_access_unit`; **emu cannot reach LAN Android** (see Gate E / run log)
 - [x] Session extras polish: screenshot (`adbScreencapPng`), app picker (`adbShellExec` + monkey), ADB sync file pull (`adbSyncPull` → app `filesDir`)
 - [ ] Keys/keepalive/resolution/rotation/backlight/power/clipboard via control contract (keepalive+touch+power/rotate/light/clipboard wired; full metrics still open)
-- [ ] H.265 Main/Main10 negotiation only after H.264 stable
-- [ ] Opus/AAC later; AVSession only if background audio is actually supported
+- [x] H.265 default (Android parity) + first-launch background `OH_VideoDecoder` HEVC probe; session one-shot AVC fallback when `CreateByMime(video/hevc)` is null
+- [x] Main-socket audio relay: `isAudio` → server handshake `can_audio`/`use_opus` → `ohos_adec` (`OH_AudioCodec` Opus/AAC + `OH_AudioRenderer`). AVSession / background audio still out of scope
 
 ### Phase 6 — ArkUI product parity
 
@@ -311,7 +311,7 @@ harmonyos/
 1. Controller runs on HarmonyOS API 24 Release device/emulator.
 2. Can pair or connect to an already-authorized Android device over network ADB.
 3. Pushes and launches the **unmodified** versioned server JAR via `app_process` with existing option string semantics.
-4. Establishes main + video sockets; decodes H.264 to fullscreen XComponent; sends touch/control packets.
+4. Establishes main + video sockets; decodes H.264/H.265 to fullscreen XComponent; optional Opus/AAC audio relay; sends touch/control packets.
 5. Survives 30-minute soak without resource leaks (gate G).
 6. Host protocol tests (gate A) remain green in CI.
 7. Notices/licenses complete for embedded server + Rust deps.
@@ -383,5 +383,6 @@ cargo run -p easycontrol-adb-client --bin gate_d -- 192.168.31.60 5555
 | 2026-08-12 | **Camera + virtual-display temp app**: Device → LiveMirror → `app_process` (`videoSource`/`cameraFacing`/`startApp`/VD size); SDK gates API 31+/30+. Fixes: NAPI passes source/`startApp` as discrete string args (object fields were dropped); `connect_dual` ignores MIUI non-fatal theme `FileNotFoundException`. Verified VD `startApp=com.kroegerama.appchecker` + `easycontrol` display on marble. |
 
 | 2026-08-13 | **HUKS wrap + service card**: per-install RSA-2048 PKCS#8, AES-256-GCM wrap (`AdbHuksWrap`) → `filesDir/adb_rsa_huks.bin`; LiveMirror/pairing/probe stop using bundled rawfile PEM. Desktop `deviceList` Form Kit card 2*2/2*4, tap → Session/Home. |
+| 2026-08-13 | **Audio + H.265 default**: live Opus/AAC HW play (`ohos_adec`); default `useH265=true` with post-first-frame HEVC probe + session AVC fallback. Save-and-connect persists editor snapshot (`overrideDevice`) so Navigation Session reuse cannot clobber address. |
 
 **Next milestone:** live pair vs Android 11+ wireless debugging (e.g. `192.168.31.60`); live first-frame confirmation (Gate E); Gate G soak; license notices.

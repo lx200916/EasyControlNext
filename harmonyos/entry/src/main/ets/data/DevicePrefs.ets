@@ -142,7 +142,7 @@ function dtoFromObject(raw: Record<string, Object>): DeviceDto {
     pairPort: asNumber(raw['pairPort'], 0),
     pairKey: asString(raw['pairKey'], ''),
     presetId: asString(raw['presetId'], ''),
-    useH265: asBoolean(raw['useH265'], false),
+    useH265: asBoolean(raw['useH265'], true),
     hevcProfile: asString(raw['hevcProfile'], 'main'),
     isAudio: asBoolean(raw['isAudio'], false),
     maxSize: asNumber(raw['maxSize'], 1600),

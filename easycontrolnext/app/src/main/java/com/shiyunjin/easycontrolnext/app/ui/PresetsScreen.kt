@@ -321,6 +321,14 @@ private fun PresetListRow(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
+          if (preset.builtInKey == ConnectionPreset.KEY_WEAK_NETWORK) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+              stringResource(R.string.preset_builtin_weak_detail),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
         }
         Icon(
           Icons.AutoMirrored.Filled.KeyboardArrowRight,
@@ -492,6 +500,14 @@ fun PresetEditorScreen(
               Spacer(modifier = Modifier.height(8.dp))
               Text(
                 stringResource(R.string.preset_builtin_edit_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+            if (existing?.builtInKey == ConnectionPreset.KEY_WEAK_NETWORK) {
+              Spacer(modifier = Modifier.height(8.dp))
+              Text(
+                stringResource(R.string.preset_builtin_weak_detail),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )

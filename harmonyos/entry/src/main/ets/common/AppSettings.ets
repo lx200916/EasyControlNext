@@ -14,6 +14,9 @@ const STORE_NAME: string = 'app_settings';
 const KEY_SESSION_BACK_TO_REMOTE: string = 'session_system_back_to_remote';
 /** TCP preflight before ADB AUTH / TLS. LAN/hotspot default is short. */
 const KEY_CONNECT_PROBE_TIMEOUT_MS: string = 'connect_probe_timeout_ms';
+/** Local OH_VideoDecoder HEVC CreateByMime result (optimistic true until probed). */
+const KEY_HEVC_AVAILABLE: string = 'hevc_decoder_available';
+const KEY_DECODER_CAPS_PROBED: string = 'decoder_caps_probed';
 
 /** LAN / hotspot: fail closed ports in well under a second. */
 export const CONNECT_PROBE_TIMEOUT_DEFAULT_MS: number = 500;
@@ -39,6 +42,9 @@ class AppSettingsStore {
   private prefs: preferences.Preferences | null = null;
   private sessionBackToRemote: boolean = true;
   private connectProbeTimeoutMsValue: number = CONNECT_PROBE_TIMEOUT_DEFAULT_MS;
+  /** Default H.265 until a background probe reports HEVC missing. */
+  private hevcAvailable: boolean = true;
+  private decoderCapsProbed: boolean = false;
   private ready: boolean = false;
   private initPromise: Promise<void> | null = null;
 
@@ -59,6 +65,8 @@ class AppSettingsStore {
       const rawTimeout: preferences.ValueType =
         await this.prefs.get(KEY_CONNECT_PROBE_TIMEOUT_MS, CONNECT_PROBE_TIMEOUT_DEFAULT_MS);
       this.connectProbeTimeoutMsValue = this.readTimeoutMs(rawTimeout);
+      this.hevcAvailable = (await this.prefs.get(KEY_HEVC_AVAILABLE, true)) as boolean;
+      this.decoderCapsProbed = (await this.prefs.get(KEY_DECODER_CAPS_PROBED, false)) as boolean;
       this.ready = true;
       ColdStartTrace.mark('AppSettings.init.end');
     } catch (e) {
@@ -116,6 +124,34 @@ class AppSettingsStore {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       hilog.warn(DOMAIN, TAG, 'save probe timeout failed %{public}s', msg);
+    }
+  }
+
+  /**
+   * New device / preset default. Optimistic H.265 (Android parity) until the
+   * first-launch background probe says this OHOS device has no HEVC decoder.
+   */
+  preferH265(): boolean {
+    if (!this.decoderCapsProbed) {
+      return true;
+    }
+    return this.hevcAvailable;
+  }
+
+  async applyDecoderCaps(hevc: boolean): Promise<void> {
+    this.hevcAvailable = hevc;
+    this.decoderCapsProbed = true;
+    const store = this.prefs;
+    if (store === null) {
+      return;
+    }
+    try {
+      await store.put(KEY_HEVC_AVAILABLE, hevc);
+      await store.put(KEY_DECODER_CAPS_PROBED, true);
+      await store.flush();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      hilog.warn(DOMAIN, TAG, 'save decoder caps failed %{public}s', msg);
     }
   }
 

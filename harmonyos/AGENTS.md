@@ -10,7 +10,7 @@ EasyControlNext 鸿蒙端是 **控制器（controller）**，不是受控端。
 
 | | |
 |---|---|
-| This project | `harmonyos/` — HarmonyOS NEXT Stage app, bundleName `com.shiyunjin.easycontrolnext` |
+| This project | `harmonyos/` — HarmonyOS NEXT Stage app, bundleName `fun.saltedfish.easycontrol.next` |
 | Android peer | `../easycontrolnext/` — Gradle / Kotlin / Jetpack Compose |
 | Controlled device | Still **Android**. Reuse existing `server` JAR (`scripts/copy_server_jar.sh` → rawfile) |
 | Native stack | Rust `protocol` + `adb_client` + ohos-rs cdylib `libadb_core.so` (NAPI). No handwritten C++ NAPI |
@@ -59,7 +59,7 @@ harmonyos/
 │       │   ├── data/DevicePrefs.ets        # preferences backend
 │       │   ├── adb/AdbPairing.ets / AdbQrPairing.ets
 │       │   ├── session/LiveMirror.ets / AdbProbeHost.ets
-│       │   ├── media/H264DecodeSession.ets
+│       │   ├── media/H264DecodeSession.ets / DecoderCapsCache.ets
 │       │   ├── native/AdbCore.ets          # NAPI wrapper
 │       │   ├── workers/AdbProbeWorker.ets  # dlopen so off UI thread
 │       │   ├── types/libadb_core.so.d.ts
@@ -71,7 +71,7 @@ harmonyos/
 └── .claude/skills/harmonyos-development/   # encyclopedia (on demand)
 ```
 
-UI entry: `pages/Index.ets` → `AppShell`. Home owns 设备 | 设置 `HdsTabs`. Add device is header `+` → `DeviceEditor`. **Session / DeviceEditor / Settings / Presets / ErrorLog are lazy imports** — they pull `libadb_core.so`; keep them off the first frame. **Form Kit cards (`formability/`) must not import `libadb_core.so`.**
+UI entry: `pages/Index.ets` → `AppShell`. Home owns 设备 | 设置 `HdsTabs`. Add device is header `+` → `DeviceEditor`. **Session / DeviceEditor / Settings / Presets / ErrorLog are lazy imports** — they pull `libadb_core.so`; keep them off the first frame. **Form Kit cards (`formability/`) must not import `libadb_core.so`.** `DecoderCapsCache` may be scheduled from `EntryAbility` after `loadContent` (lazy `DecodeCaps`, ~1.8s).
 
 Routes (`AppNavDestination`): `settings`, `presets`, `error_logs`, `device` (uuid or `new`), `session` (uuid).
 
@@ -232,7 +232,9 @@ export OHOS_NDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk/default/openha
 
 ArkTS: `import adbCore from 'libadb_core.so';` (types in `ets/types/libadb_core.so.d.ts`).
 
-Video: `protocol::video` length-prefix + **PTS** (`pts:i64 BE`) + Annex-B; NAPI `OH_VideoDecoder` in `native/adb_core/src/ohos_vdec.rs` (`RenderOutputBufferAtTime` + monotonic ns; live duplicate PTS → +16667µs). Live: `liveSessionStart` / poll `liveSessionStatus()`; success HiLog `SessionDecode FIRST_FRAME_OK`. Fixture fallback: `rawfile/fixture_avc_easycontrol.bin`.
+Video: `protocol::video` length-prefix + **PTS** (`pts:i64 BE`) + Annex-B; NAPI `OH_VideoDecoder` in `native/adb_core/src/ohos_vdec.rs` (`RenderOutputBufferAtTime` + monotonic ns; live duplicate PTS → +16667µs). Default `useH265=true`; first-launch background HEVC probe (`DecoderCapsCache`); session AVC fallback if `CreateByMime` is null. Fixture: `rawfile/fixture_avc_easycontrol.bin`. Live: `liveSessionStart` / poll `liveSessionStatus()`; success HiLog `SessionDecode FIRST_FRAME_OK`.
+
+Audio: `Device.isAudio` → main-socket Opus/AAC → `ohos_adec` (`OH_AudioCodec` + `OH_AudioRenderer`). Session toggle reconnects. No AVSession.
 
 If pairing TLS / first-frame “doesn't match source”, rebuild `.so` with `--force` then Assemble — do not debug ArkTS first.
 

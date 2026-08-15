@@ -7,6 +7,7 @@ import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { ColdStartTrace } from '../common/ColdStartTrace';
 import { DevicePrefs } from '../data/DevicePrefs';
+import { AppSettings } from '../common/AppSettings';
 import { Device } from './Device';
 import { findDeviceByUuid, formatDeviceEndpoint } from './MockDevices';
 import { pushDeviceForms } from '../formability/DeviceFormSync';
@@ -129,6 +130,7 @@ export class DeviceStore {
     d.pairKey = '';
     d.maxSize = 1600;
     d.maxFps = 60;
+    d.useH265 = AppSettings.preferH265();
     return d;
   }
 

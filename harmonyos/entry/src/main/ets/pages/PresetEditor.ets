@@ -30,7 +30,7 @@ export struct PresetEditor {
   @State private maxSizeText: string = '1600';
   @State private maxFpsText: string = '60';
   @State private maxVideoBitText: string = '4';
-  @State private useH265: boolean = false;
+  @State private useH265: boolean = true;
   @State private keepWakeOnRunning: boolean = true;
   @State private changeToFullOnConnect: boolean = false;
   @State private wakeOnConnect: boolean = true;

@@ -11,6 +11,10 @@
     ],
     "deliveryWithInstall": true,
     "installationFree": false,
+    "querySchemes": [
+      "https",
+      "http"
+    ],
     "pages": "$profile:main_pages",
     "requestPermissions": [
       {

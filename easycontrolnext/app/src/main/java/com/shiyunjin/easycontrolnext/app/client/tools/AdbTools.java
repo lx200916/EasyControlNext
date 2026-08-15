@@ -25,6 +25,7 @@ import com.shiyunjin.easycontrolnext.app.adb.AdbConnectionManager;
 import com.shiyunjin.easycontrolnext.app.adb.AdbServiceDiscovery;
 import com.shiyunjin.easycontrolnext.app.entity.AppData;
 import com.shiyunjin.easycontrolnext.app.entity.Device;
+import com.shiyunjin.easycontrolnext.app.entity.Setting;
 import com.shiyunjin.easycontrolnext.app.entity.MyInterface;
 import com.shiyunjin.easycontrolnext.app.helper.PublicTools;
 
@@ -71,10 +72,23 @@ public class AdbTools {
    * After controller shows AOSP QR (WIFI:T:ADB;S:...;P:...;;), wait for the controlled
    * phone to scan it, advertise pairing over mDNS, then pair and discover connect port.
    *
+   * The QR itself never contains IP or the ADB connect port. Host comes from
+   * {@code _adb-tls-pairing._tcp}; connect port from {@code _adb-tls-connect._tcp}.
+   *
    * @return String[2] = { host, connectPort } — connectPort may be empty if not found
    */
   public static String[] pairWithQrCredentials(Context context, String serviceName, String password, long timeoutMs)
       throws Exception {
+    return pairWithQrCredentials(context, serviceName, password, timeoutMs, null);
+  }
+
+  public static String[] pairWithQrCredentials(
+      Context context,
+      String serviceName,
+      String password,
+      long timeoutMs,
+      MyInterface.MyFunctionString progress
+  ) throws Exception {
     if (context == null) throw new Exception("Context 为空");
     if (serviceName == null || serviceName.isEmpty()) throw new Exception("二维码服务名无效");
     if (password == null || password.isEmpty()) throw new Exception("二维码密码无效");
@@ -84,12 +98,19 @@ public class AdbTools {
     if (pairing == null) {
       throw new Exception("未发现被控机。请在被控机：开发者选项 → 无线调试 →「使用二维码配对」，扫描本页二维码，并保持同一 Wi‑Fi。");
     }
+    notifyProgress(progress, context.getString(R.string.qr_pair_found_pairing));
     pairWireless(pairing.getHost(), pairing.getPort(), password);
 
-    AdbServiceDiscovery.Endpoint connect = AdbServiceDiscovery.INSTANCE.discoverConnectForHost(
-        context.getApplicationContext(), pairing.getHost(), Math.max(4000L, timeoutMs / 2));
-    String port = connect != null ? String.valueOf(connect.getPort()) : "";
-    return new String[]{pairing.getHost(), port};
+    notifyProgress(progress, context.getString(R.string.qr_pair_discovering_port));
+    // Phone may take a moment to (re)advertise _adb-tls-connect after pair.
+    try {
+      Thread.sleep(400);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+    int port = discoverConnectPortAfterPair(context.getApplicationContext(), pairing.getHost());
+    String portStr = port > 0 ? String.valueOf(port) : "";
+    return new String[]{pairing.getHost(), portStr};
   }
 
   /**
@@ -102,6 +123,56 @@ public class AdbTools {
     AdbServiceDiscovery.Endpoint ep = AdbServiceDiscovery.INSTANCE.discoverConnectForHost(
         context.getApplicationContext(), expectedHost, timeoutMs);
     return ep == null ? -1 : ep.getPort();
+  }
+
+  /**
+   * Poll {@link #discoverTlsConnectPort} until [budgetMs] elapses. Wireless-debug
+   * often advertises the connect service a few seconds after pairing succeeds.
+   */
+  /** mDNS connect-port retry, then classic 5555 if that TCP port is open. */
+  public static int discoverConnectPortAfterPair(Context context, String expectedHost) {
+    int port = discoverTlsConnectPortWithRetry(context, expectedHost, 10_000L);
+    if (port <= 0) port = probeClassicAdbPort(expectedHost);
+    return port;
+  }
+
+  public static int discoverTlsConnectPortWithRetry(Context context, String expectedHost, long budgetMs) {
+    if (context == null) return -1;
+    long deadline = System.currentTimeMillis() + Math.max(4000L, budgetMs);
+    int found = -1;
+    while (found <= 0 && System.currentTimeMillis() < deadline) {
+      long remaining = deadline - System.currentTimeMillis();
+      if (remaining <= 0) break;
+      found = discoverTlsConnectPort(context, expectedHost, Math.min(4000L, Math.max(1500L, remaining)));
+      if (found <= 0) {
+        try {
+          Thread.sleep(300);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          break;
+        }
+      }
+    }
+    return found;
+  }
+
+  /** Last-resort: classic `adb tcpip 5555` is sometimes still open after wireless pair. */
+  private static int probeClassicAdbPort(String host) {
+    if (host == null || host.isEmpty()) return -1;
+    try {
+      PublicTools.probeTcpReachable(host, 5555, 400);
+      return 5555;
+    } catch (Exception ignored) {
+      return -1;
+    }
+  }
+
+  private static void notifyProgress(MyInterface.MyFunctionString progress, String message) {
+    if (progress == null) return;
+    try {
+      progress.run(message);
+    } catch (Exception ignored) {
+    }
   }
 
   // 连接ADB
@@ -125,8 +196,12 @@ public class AdbTools {
     manager.setThrowOnUnauthorised(true);
 
     String ip = PublicTools.getIp(device.address);
+    int probeTimeoutMs = AppData.setting != null
+        ? AppData.setting.getReachabilityTimeoutMs()
+        : Setting.REACHABILITY_TIMEOUT_DEFAULT_MS;
     String pairKey = normalizePairCode(device.pairKey);
     if (device.pairPort > 0 && !pairKey.isEmpty()) {
+      requireReachable(ip, device.pairPort, probeTimeoutMs);
       try {
         manager.pair(ip, device.pairPort, pairKey);
         device.pairPort = 0;
@@ -144,6 +219,8 @@ public class AdbTools {
     if (connectPort <= 0) {
       throw new Exception("连接端口无效。请填写无线调试页面顶部的 IP:端口 中的端口（通常不是 5555）。");
     }
+
+    requireReachable(ip, connectPort, probeTimeoutMs);
 
     try {
       manager.connect(ip, connectPort);
@@ -179,6 +256,18 @@ public class AdbTools {
           + "。Android 11+ 请用无线调试主页顶部的端口，不要用配对弹窗端口，也不要默认填 5555。", e);
     }
     return new Adb(manager);
+  }
+
+  private static void requireReachable(String ip, int port, int timeoutMs) throws Exception {
+    try {
+      PublicTools.probeTcpReachable(ip, port, timeoutMs);
+    } catch (Exception e) {
+      if (Thread.currentThread().isInterrupted()) {
+        throw e;
+      }
+      throw new Exception(AppData.applicationContext.getString(
+          R.string.toast_host_unreachable, ip, port, timeoutMs), e);
+    }
   }
 
   private static String rootMessage(Throwable e) {

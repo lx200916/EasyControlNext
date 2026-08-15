@@ -18,7 +18,7 @@ import {
 
 const DOMAIN: number = 0x0001;
 const TAG: string = 'LiveMirror';
-const APP_VERSION_CODE: number = 10014;
+const APP_VERSION_CODE: number = 10015;
 
 export interface LiveStatus {
   phase: string;
@@ -102,7 +102,7 @@ async function loadLiveAssets(ctx: common.UIAbilityContext): Promise<CachedLiveA
 }
 
 /**
- * @param forceAvc When true, ignore device.useH265 and request AVC (HarmonyOS often lacks HEVC).
+ * @param forceAvc When true, ignore device.useH265 and request AVC (HEVC CreateByMime failed).
  */
 export async function startLiveMirror(
   ctx: common.UIAbilityContext,

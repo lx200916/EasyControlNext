@@ -4,12 +4,15 @@
  * Home 设置 tab embeds this with embedded=true (no NavDestination / back chrome).
  */
 
+import { common } from '@kit.AbilityKit';
 import { HdsNavDestination } from '@kit.UIDesignKit';
 import { hdsOverlayTitleBar, HDS_MINI_TITLE_INSET_VP } from '../common/HdsTitleBar';
 import { GateBDebugStrip } from '../components/GateBDebugStrip';
 import { DecodeCapsStrip } from '../components/DecodeCapsStrip';
 import { PresetListPanel } from '../components/PresetListPanel';
 import { AppSettings, CONNECT_PROBE_TIMEOUT_DEFAULT_MS, CONNECT_PROBE_TIMEOUT_OPTIONS_MS } from '../common/AppSettings';
+
+const PROJECT_HOME_URL: string = 'https://github.com/lx200916/EasyControlNext';
 
 const CAT_ABOUT: string = 'about';
 const CAT_GENERAL: string = 'general';
@@ -62,6 +65,17 @@ export struct Settings {
     this.probeTimeoutIndex = index;
     this.probeTimeoutMs = CONNECT_PROBE_TIMEOUT_OPTIONS_MS[index];
     void AppSettings.setConnectProbeTimeoutMs(this.probeTimeoutMs);
+  }
+
+  private openProjectHome(): void {
+    try {
+      const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      void ctx.openLink(PROJECT_HOME_URL).catch(() => {
+        this.toast(PROJECT_HOME_URL);
+      });
+    } catch (_e) {
+      this.toast(PROJECT_HOME_URL);
+    }
   }
 
   private toast(message: string): void {
@@ -241,7 +255,13 @@ export struct Settings {
 
       Divider().color($r('app.color.divider')).margin({ left: 16 })
 
-      this.valueRow($r('app.string.settings_bundle'), 'com.shiyunjin.easycontrolnext')
+      this.valueRow($r('app.string.settings_bundle'), 'fun.saltedfish.easycontrol.next')
+
+      Divider().color($r('app.color.divider')).margin({ left: 16 })
+
+      this.navRow($r('app.string.settings_homepage'), PROJECT_HOME_URL, () => {
+        this.openProjectHome();
+      })
 
       Divider().color($r('app.color.divider')).margin({ left: 16 })
 
@@ -440,8 +460,12 @@ export struct Settings {
           this.showLanguageSheet = false;
         })
     }
-    .width('100%')
-    .padding({ left: 20, right: 20, top: 8, bottom: 28 + this.safeBottomVp })
+    .padding({
+      left: 20,
+      right: 20,
+      top: 16,
+      bottom: 28 + this.safeBottomVp,
+    })
   }
 
   @Builder

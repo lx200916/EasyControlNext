@@ -154,16 +154,23 @@ fun DeviceEditorScreen(
       try {
         withContext(Dispatchers.IO) { AdbTools.pairWireless(host, pPort, form.pairCode) }
         val discovered = withContext(Dispatchers.IO) {
-          AdbTools.discoverTlsConnectPort(context, host, 4000)
+          AdbTools.discoverConnectPortAfterPair(context, host)
         }
         if (discovered > 0) {
           form = form.copy(connectPort = discovered.toString(), pairPort = "", pairCode = "")
-          status = "配对成功。已填入连接端口 $discovered"
+          selectedPane = DeviceEditorPane.Basic
+          status = if (discovered == 5555) {
+            context.getString(R.string.qr_pair_success_filled_classic, host)
+          } else {
+            context.getString(R.string.pair_success_filled, discovered)
+          }
         } else {
-          form = form.copy(pairPort = "", pairCode = "")
-          status = "配对成功。请确认连接端口后保存。"
+          val cleared = if (form.connectPort.trim() == "5555") "" else form.connectPort
+          form = form.copy(connectPort = cleared, pairPort = "", pairCode = "")
+          selectedPane = DeviceEditorPane.Basic
+          status = context.getString(R.string.pair_success_need_port)
         }
-        Toast.makeText(context, "配对成功", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.qr_pair_success_toast), Toast.LENGTH_SHORT).show()
       } catch (e: Exception) {
         status = e.message
         AppErrorLog.e("pair", e.message ?: "配对失败", e)
@@ -207,7 +214,7 @@ fun DeviceEditorScreen(
               device.pairPort = 0
               device.pairKey = ""
             }
-            AdbTools.discoverTlsConnectPort(context, device.address, 4000)
+            AdbTools.discoverConnectPortAfterPair(context, device.address)
           }
           if (discovered > 0) {
             device.adbPort = discovered
@@ -490,15 +497,25 @@ fun DeviceEditorScreen(
     QrPairDialog(
       onDismiss = { showQr = false },
       onPaired = { host, port ->
+        val nextPort = when {
+          port > 0 -> port.toString()
+          form.connectPort.trim() == "5555" -> ""
+          else -> form.connectPort
+        }
         form = form.copy(
           address = host,
-          connectPort = if (port > 0) port.toString() else form.connectPort,
+          connectPort = nextPort,
           pairPort = "",
           pairCode = "",
         )
+        selectedPane = DeviceEditorPane.Basic
         showQr = false
-        status = if (port > 0) "二维码配对成功 · $host:$port" else "二维码配对成功 · $host（请确认连接端口）"
-        Toast.makeText(context, "配对成功", Toast.LENGTH_SHORT).show()
+        status = when {
+          port > 0 && port != 5555 -> context.getString(R.string.qr_pair_success_filled, host, port)
+          port == 5555 -> context.getString(R.string.qr_pair_success_filled_classic, host)
+          else -> context.getString(R.string.qr_pair_success_need_port, host)
+        }
+        Toast.makeText(context, context.getString(R.string.qr_pair_success_toast), Toast.LENGTH_SHORT).show()
       },
     )
   }
@@ -653,9 +670,9 @@ private fun DeviceBasicFields(
       value = form.connectPort,
       onValueChange = { onFormChange(form.copy(connectPort = it.filter(Char::isDigit).take(5))) },
       modifier = Modifier.fillMaxWidth(),
-      label = { Text("连接端口") },
-      placeholder = { Text("无线调试主页顶部端口") },
-      supportingText = { Text("不是配对弹窗端口；Android 11+ 通常也不是 5555") },
+      label = { Text(stringResource(R.string.device_connect_port)) },
+      placeholder = { Text(stringResource(R.string.device_connect_port_placeholder)) },
+      supportingText = { Text(stringResource(R.string.device_connect_port_hint)) },
       singleLine = true,
       keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
       shape = RoundedCornerShape(14.dp),
@@ -1042,7 +1059,7 @@ private fun QrPairDialog(
   val qrBitmap: Bitmap = remember(credentials.payload) {
     AdbQrPairing.encodeBitmap(credentials.payload, 840)
   }
-  var status by remember { mutableStateOf("等待被控机扫码…") }
+  var status by remember { mutableStateOf(context.getString(R.string.qr_pair_waiting)) }
   var pairing by remember { mutableStateOf(true) }
   var job by remember { mutableStateOf<Job?>(null) }
   val scope = rememberCoroutineScope()
@@ -1050,7 +1067,7 @@ private fun QrPairDialog(
   DisposableEffect(credentials.serviceName) {
     job = scope.launch {
       pairing = true
-      status = "等待被控机扫码…"
+      status = context.getString(R.string.qr_pair_waiting)
       try {
         val result = withContext(Dispatchers.IO) {
           // Poll until timeout — phone may need time after scan
@@ -1063,22 +1080,22 @@ private fun QrPairDialog(
                 credentials.serviceName,
                 credentials.password,
                 8_000,
-              )
+              ) { msg -> status = msg }
             } catch (e: Exception) {
               lastError = e
-              status = "等待扫码中…（保持二维码页开启）"
+              status = context.getString(R.string.qr_pair_waiting_keep_open)
             }
           }
-          throw lastError ?: Exception("配对超时")
+          throw lastError ?: Exception(context.getString(R.string.qr_pair_timeout))
         }
         val host = result[0]
         val port = result[1].toIntOrNull() ?: 0
-        status = "配对成功"
+        status = context.getString(R.string.qr_pair_success_toast)
         pairing = false
         onPaired(host, port)
       } catch (e: Exception) {
         if (isActive) {
-          status = e.message ?: "配对失败"
+          status = e.message ?: context.getString(R.string.qr_pair_failed)
           pairing = false
           AppErrorLog.e("qr-pair", e.message ?: "二维码配对失败", e)
         }
@@ -1100,16 +1117,16 @@ private fun QrPairDialog(
       ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
           Text(
-            "二维码配对",
+            stringResource(R.string.qr_pair_title),
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.weight(1f),
           )
           IconButton(onClick = onDismiss) {
-            Icon(Icons.Default.Close, contentDescription = "关闭")
+            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.qr_pair_close))
           }
         }
         Text(
-          "被控机：开发者选项 → 无线调试 →「使用二维码配对」扫描下方二维码",
+          stringResource(R.string.qr_pair_hint),
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

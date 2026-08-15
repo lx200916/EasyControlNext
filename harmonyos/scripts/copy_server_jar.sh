@@ -50,7 +50,7 @@ if [[ -f "$APP_GRADLE" ]]; then
   )"
 fi
 if [[ -z "${VERSION_CODE}" ]]; then
-  VERSION_CODE="10014"
+  VERSION_CODE="10015"
   echo "warn: could not parse app versionCode; defaulting to ${VERSION_CODE}" >&2
 fi
 

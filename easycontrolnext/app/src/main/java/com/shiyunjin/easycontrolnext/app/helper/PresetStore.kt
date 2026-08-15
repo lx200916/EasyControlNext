@@ -154,6 +154,7 @@ object PresetStore {
       ConnectionPreset.normalRemote(ctx.getString(R.string.preset_builtin_normal)),
       ConnectionPreset.cameraMonitor(ctx.getString(R.string.preset_builtin_camera)),
       ConnectionPreset.singleApp(ctx.getString(R.string.preset_builtin_single_app)),
+      ConnectionPreset.weakNetwork(ctx.getString(R.string.preset_builtin_weak)),
     )
   }
 
@@ -166,6 +167,8 @@ object PresetStore {
         ConnectionPreset.cameraMonitor(ctx.getString(R.string.preset_builtin_camera))
       ConnectionPreset.KEY_SINGLE_APP ->
         ConnectionPreset.singleApp(ctx.getString(R.string.preset_builtin_single_app))
+      ConnectionPreset.KEY_WEAK_NETWORK ->
+        ConnectionPreset.weakNetwork(ctx.getString(R.string.preset_builtin_weak))
       else -> null
     }
   }

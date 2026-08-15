@@ -1,10 +1,11 @@
 /**
  * U3 Device Editor — basic host/port/name + wireless pairing + save.
- * sm: scroll form + bottom bar; preferSplit: left section nav + right form.
+ * sm: chips + card under HDS glass; save lives in title-bar checkmark / back sheet.
+ * preferSplit: left rail + right form, with save buttons in the rail.
  */
 
 import { common } from '@kit.AbilityKit';
-import { ComponentContent } from '@kit.ArkUI';
+import { ComponentContent, SymbolGlyphModifier } from '@kit.ArkUI';
 import { HdsNavDestination } from '@kit.UIDesignKit';
 import { hdsOverlayTitleBar, HDS_MINI_TITLE_INSET_VP } from '../common/HdsTitleBar';
 import { image } from '@kit.ImageKit';
@@ -25,12 +26,15 @@ import { ConnectionPreset } from '../model/ConnectionPreset';
 import { PresetStore } from '../model/PresetStore';
 import { probeRemoteSystemPropsLazy, probeTcpReachableLazy } from '../session/LiveMirrorLazy';
 import { RemoteSystemProps } from '../session/RemoteDeviceTypes';
+import { SessionLaunchOpts, stageSessionLaunch } from '../session/SessionLaunch';
 
 const SECTION_BASIC: string = 'basic';
 const SECTION_PAIRING: string = 'pairing';
 const SECTION_VIDEO: string = 'video';
 /** Live QR dialog status — ComponentContent builders are not @State-reactive. */
 const QR_PAIR_STATUS_KEY: string = 'qr_pair_status';
+const EDITOR_SHEET_PRESET: number = 1;
+const EDITOR_SHEET_SAVE: number = 2;
 
 /** Params for QR pairing custom dialog (module-level builder + ComponentContent). */
 class QrPairDialogParams {
@@ -146,7 +150,7 @@ export struct DeviceEditor {
   @Consume('pathStack') pathStack: NavPathStack;
   @Consume('preferSplit') preferSplit: boolean;
   @Consume('safeBottomVp') safeBottomVp: number;
-  @Prop uuid: string = 'new';
+  @Prop @Watch('onUuidChanged') uuid: string = 'new';
   /** When true, render inline (sheet / embedded host) without NavDestination / back chrome. */
   @Prop embedded: boolean = false;
   /** Bump to reset draft fields after a successful save (embedded create flow). */
@@ -184,10 +188,13 @@ export struct DeviceEditor {
   @State private maxSizeText: string = '1600';
   @State private maxFpsText: string = '60';
   @State private maxVideoBitText: string = '4';
-  @State private useH265: boolean = false;
+  @State private useH265: boolean = true;
   @State private presetId: string = '';
-  @State private showPresetPicker: boolean = false;
+  @State private showEditorSheet: boolean = false;
+  @State private editorSheetKind: number = 0;
+  @State private savePromptFromBack: boolean = false;
   @State private presetOptions: ConnectionPreset[] = [];
+  private readonly saveIcon: SymbolGlyphModifier = new SymbolGlyphModifier($r('sys.symbol.checkmark'));
   @State private maxSizeIndex: number = 2;
   @State private maxFpsIndex: number = 1;
   @State private maxVideoBitIndex: number = 1;
@@ -209,19 +216,46 @@ export struct DeviceEditor {
   private qrCreds: AdbQrCredentials | undefined = undefined;
   /** Bumped on dismiss/cancel so in-flight QR pairing ignores late results. */
   private qrSessionId: number = 0;
+  /** Ignore stale PresetStore/DeviceStore init callbacks after uuid change or user edits. */
+  private loadGen: number = 0;
+  private formDirty: boolean = false;
+  private didLoad: boolean = false;
 
   aboutToAppear(): void {
+    this.reloadForm();
+  }
+
+  private onUuidChanged(): void {
+    this.formDirty = false;
+    this.didLoad = false;
+    this.reloadForm();
+  }
+
+  private reloadForm(): void {
     this.isNew = this.uuid === 'new' || this.uuid.length === 0;
+    const gen = ++this.loadGen;
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
     void PresetStore.init(ctx).then(() => {
+      if (gen !== this.loadGen || (this.formDirty && this.didLoad)) {
+        return;
+      }
       if (this.isNew) {
         this.resetToDraft();
+        this.didLoad = true;
         return;
       }
       void DeviceStore.init(ctx).then(() => {
+        if (gen !== this.loadGen || (this.formDirty && this.didLoad)) {
+          return;
+        }
         this.loadExistingOrDraft();
+        this.didLoad = true;
       }).catch(() => {
+        if (gen !== this.loadGen || (this.formDirty && this.didLoad)) {
+          return;
+        }
         this.loadExistingOrDraft();
+        this.didLoad = true;
       });
     });
   }
@@ -230,6 +264,8 @@ export struct DeviceEditor {
     if (!this.embedded) {
       return;
     }
+    this.formDirty = false;
+    this.didLoad = false;
     this.resetToDraft();
   }
 
@@ -431,14 +467,41 @@ export struct DeviceEditor {
 
   private openPresetPicker(): void {
     this.presetOptions = PresetStore.all();
-    this.showPresetPicker = true;
+    this.savePromptFromBack = false;
+    this.editorSheetKind = EDITOR_SHEET_PRESET;
+    this.showEditorSheet = true;
+  }
+
+  private closeEditorSheet(): void {
+    this.showEditorSheet = false;
+  }
+
+  private openSavePrompt(fromBack: boolean): void {
+    this.savePromptFromBack = fromBack;
+    this.editorSheetKind = EDITOR_SHEET_SAVE;
+    this.showEditorSheet = true;
+  }
+
+  private chooseSave(andConnect: boolean): void {
+    this.closeEditorSheet();
+    this.onSave(andConnect);
+  }
+
+  private discardAndLeave(): void {
+    this.closeEditorSheet();
+    this.formDirty = false;
+    if (this.embedded) {
+      return;
+    }
+    this.pathStack.pop();
   }
 
   private applyPickedPreset(preset: ConnectionPreset): void {
     const device = this.buildDevice();
     preset.applyTo(device);
     this.applyDevice(device);
-    this.showPresetPicker = false;
+    this.formDirty = true;
+    this.closeEditorSheet();
     this.toast(`已应用「${preset.name}」`);
   }
 
@@ -766,8 +829,10 @@ export struct DeviceEditor {
     if (!this.validate()) {
       return;
     }
-    void DeviceStore.upsert(this.buildDevice()).then((saved: Device) => {
+    const draft = this.buildDevice();
+    void DeviceStore.upsert(draft).then((saved: Device) => {
       this.isNew = false;
+      this.formDirty = false;
       if (!andConnect) {
         this.toast(`已保存 · ${displayDeviceName(saved)}`);
         if (this.embedded) {
@@ -786,6 +851,9 @@ export struct DeviceEditor {
           return;
         }
         this.toast(`已保存，正在连接 ${displayDeviceName(saved)}`);
+        const opts = new SessionLaunchOpts();
+        opts.overrideDevice = saved;
+        stageSessionLaunch(opts);
         if (this.embedded) {
           this.onSaved();
           this.pathStack.pushPath({ name: 'session', param: saved.uuid });
@@ -885,6 +953,7 @@ export struct DeviceEditor {
           .borderRadius($r('app.float.radius_md'))
           .padding({ left: 12, right: 12 })
           .onChange((v: string) => {
+            this.formDirty = true;
             this.nameText = v;
           })
       }
@@ -899,6 +968,7 @@ export struct DeviceEditor {
           .borderRadius($r('app.float.radius_md'))
           .padding({ left: 12, right: 12 })
           .onChange((v: string) => {
+            this.formDirty = true;
             this.hostText = v;
           })
       }
@@ -914,6 +984,7 @@ export struct DeviceEditor {
           .borderRadius($r('app.float.radius_md'))
           .padding({ left: 12, right: 12 })
           .onChange((v: string) => {
+            this.formDirty = true;
             this.adbPortText = v;
           })
       }
@@ -1422,11 +1493,10 @@ export struct DeviceEditor {
         .backgroundColor($r('app.color.surface_muted'))
         .fontColor($r('app.color.ink'))
         .onClick(() => {
-          this.showPresetPicker = false;
+          this.closeEditorSheet();
         })
     }
     .width('100%')
-    .padding({ left: 20, right: 20, top: 8, bottom: 28 + this.safeBottomVp })
   }
 
   @Builder
@@ -1484,40 +1554,6 @@ export struct DeviceEditor {
           .fontColor($r('app.color.accent_blue'))
           .width('100%')
       }
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  private formBody() {
-    if (this.section === SECTION_BASIC) {
-      this.basicForm()
-    } else if (this.section === SECTION_PAIRING) {
-      this.pairingForm()
-    } else if (this.section === SECTION_VIDEO) {
-      this.videoForm()
-    } else {
-      Text($r('app.string.editor_section_later'))
-        .fontSize(14)
-        .fontColor($r('app.color.text_secondary'))
-    }
-  }
-
-  @Builder
-  private bottomBar() {
-    Column({ space: 8 }) {
-      if (this.pairBusy || this.qrWaiting) {
-        Text(this.pairStatus.length > 0 ? this.pairStatus : '处理中…')
-          .fontSize(12)
-          .fontColor($r('app.color.text_secondary'))
-          .width('100%')
-      } else if (this.pairStatus.length > 0) {
-        Text(this.pairStatus)
-          .fontSize(12)
-          .fontColor($r('app.color.accent_blue'))
-          .width('100%')
-      }
 
       Row({ space: 8 }) {
         Button($r('app.string.editor_action_pair_only'))
@@ -1542,123 +1578,216 @@ export struct DeviceEditor {
           })
       }
       .width('100%')
-
-      Row({ space: 10 }) {
-        Button($r('app.string.action_save'))
-          .type(ButtonType.Capsule)
-          .layoutWeight(1)
-          .height(40)
-          .backgroundColor($r('app.color.accent_container'))
-          .fontColor($r('app.color.accent_blue'))
-          .enabled(!this.pairBusy)
-          .onClick(() => {
-            this.onSave(false);
-          })
-
-        Button($r('app.string.action_save_connect'))
-          .type(ButtonType.Capsule)
-          .layoutWeight(1)
-          .height(40)
-          .backgroundColor($r('app.color.brand_ink'))
-          .fontColor($r('app.color.on_brand_ink'))
-          .enabled(!this.pairBusy)
-          .onClick(() => {
-            this.onSave(true);
-          })
-      }
-      .width('100%')
     }
     .width('100%')
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  private formBody() {
+    if (this.section === SECTION_BASIC) {
+      this.basicForm()
+    } else if (this.section === SECTION_PAIRING) {
+      this.pairingForm()
+    } else if (this.section === SECTION_VIDEO) {
+      this.videoForm()
+    } else {
+      Text($r('app.string.editor_section_later'))
+        .fontSize(14)
+        .fontColor($r('app.color.text_secondary'))
+    }
+  }
+
+  @Builder
+  private editorSheetBuilder() {
+    Column() {
+      if (this.editorSheetKind === EDITOR_SHEET_SAVE) {
+        this.savePromptBuilder()
+      } else {
+        this.presetPickerBuilder()
+      }
+    }
     .padding({
-      left: $r('app.float.space_page_h'),
-      right: $r('app.float.space_page_h'),
-      top: 10,
-      bottom: 12 + (this.embedded ? 8 : this.safeBottomVp),
+      left: 20,
+      right: 20,
+      top: 16,
+      bottom: 28 + this.safeBottomVp,
     })
-    .backgroundColor(this.embedded ? Color.Transparent : $r('app.color.page_background'))
+  }
+
+  @Builder
+  private savePromptBuilder() {
+    Column({ space: 10 }) {
+      Text(this.savePromptFromBack
+        ? $r('app.string.editor_leave_prompt_title')
+        : $r('app.string.editor_save_prompt_title'))
+        .fontSize(18)
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.ink'))
+        .width('100%')
+      Text($r('app.string.editor_save_prompt_hint'))
+        .fontSize(13)
+        .fontColor($r('app.color.text_secondary'))
+        .width('100%')
+        .margin({ bottom: 4 })
+
+      Button($r('app.string.action_save'))
+        .type(ButtonType.Capsule)
+        .width('100%')
+        .height(44)
+        .backgroundColor($r('app.color.accent_container'))
+        .fontColor($r('app.color.accent_blue'))
+        .enabled(!this.pairBusy)
+        .onClick(() => {
+          this.chooseSave(false);
+        })
+
+      Button($r('app.string.action_save_connect'))
+        .type(ButtonType.Capsule)
+        .width('100%')
+        .height(44)
+        .backgroundColor($r('app.color.brand_ink'))
+        .fontColor($r('app.color.on_brand_ink'))
+        .enabled(!this.pairBusy)
+        .onClick(() => {
+          this.chooseSave(true);
+        })
+
+      if (this.savePromptFromBack) {
+        Button($r('app.string.editor_discard'))
+          .type(ButtonType.Capsule)
+          .width('100%')
+          .height(44)
+          .backgroundColor($r('app.color.surface_muted'))
+          .fontColor($r('app.color.ink'))
+          .onClick(() => {
+            this.discardAndLeave();
+          })
+      }
+    }
+    .width('100%')
+  }
+
+  @Builder
+  private saveActions() {
+    Column({ space: 10 }) {
+      Button($r('app.string.action_save'))
+        .type(ButtonType.Capsule)
+        .width('100%')
+        .height(40)
+        .backgroundColor($r('app.color.accent_container'))
+        .fontColor($r('app.color.accent_blue'))
+        .enabled(!this.pairBusy)
+        .onClick(() => {
+          this.onSave(false);
+        })
+
+      Button($r('app.string.action_save_connect'))
+        .type(ButtonType.Capsule)
+        .width('100%')
+        .height(40)
+        .backgroundColor($r('app.color.brand_ink'))
+        .fontColor($r('app.color.on_brand_ink'))
+        .enabled(!this.pairBusy)
+        .onClick(() => {
+          this.onSave(true);
+        })
+    }
+    .width('100%')
+  }
+
+  /** Form block scrolls as a whole — do not clip a viewport-sized rounded pane. */
+  @Builder
+  private formCard() {
+    Column() {
+      this.formBody()
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .padding({ left: 16, right: 16, top: 16, bottom: 20 })
+    .backgroundColor($r('app.color.surface_card'))
+    .borderRadius($r('app.float.radius_md'))
+    .clip(true)
   }
 
   @Builder
   private editorBody() {
     Column() {
-      // Non-embedded: HdsNavDestination title overlays; form scrolls under it.
-
       if (this.preferSplit && !this.embedded) {
-        Row({ space: 12 }) {
+        Row() {
           Column() {
             this.sectionNav()
+            Blank()
+            this.saveActions()
           }
-          .width('30%')
+          .width(200)
           .height('100%')
-          .backgroundColor($r('app.color.surface_card'))
-          .borderRadius($r('app.float.radius_detail_panel'))
-          .padding(8)
+          .justifyContent(FlexAlign.Start)
+          .padding({
+            left: 8,
+            right: 8,
+            top: HDS_MINI_TITLE_INSET_VP,
+            bottom: 12 + this.safeBottomVp,
+          })
 
-          Column() {
-            Scroll(this.formScroller) {
-              Column() {
-                this.formBody()
-              }
-              .width('100%')
-              .padding(20)
+          Divider()
+            .vertical(true)
+            .color($r('app.color.divider'))
+            .height('100%')
+
+          Scroll(this.formScroller) {
+            Column() {
+              this.formCard()
             }
-            .clip(false)
-            .edgeEffect(EdgeEffect.Spring)
-            .layoutWeight(1)
-            .align(Alignment.TopStart)
-            .contentStartOffset(0)
-
-            this.bottomBar()
+            .width('100%')
+            .padding({
+              left: 16,
+              right: 16,
+              top: 12,
+              bottom: 16,
+            })
           }
+          .clip(false)
+          .edgeEffect(EdgeEffect.Spring)
           .layoutWeight(1)
           .height('100%')
-          .backgroundColor($r('app.color.surface_card'))
-          .borderRadius($r('app.float.radius_detail_panel'))
+          .align(Alignment.TopStart)
+          .contentStartOffset(HDS_MINI_TITLE_INSET_VP)
+          .contentEndOffset(this.safeBottomVp)
         }
         .width('100%')
         .layoutWeight(1)
-        .padding({
-          left: $r('app.float.space_page_h'),
-          right: $r('app.float.space_page_h'),
-          top: this.embedded ? 8 : HDS_MINI_TITLE_INSET_VP,
-          bottom: 8,
-        })
       } else {
         Scroll(this.formScroller) {
-          Column() {
+          Column({ space: 12 }) {
             Row({ space: 8 }) {
               this.compactSectionChip(SECTION_BASIC, '基本')
               this.compactSectionChip(SECTION_PAIRING, '配对')
               this.compactSectionChip(SECTION_VIDEO, '视频')
             }
             .width('100%')
-            .padding({
-              left: $r('app.float.space_page_h'),
-              right: $r('app.float.space_page_h'),
-              top: 4,
-              bottom: 4,
-            })
 
-            Column() {
-              this.formBody()
+            if (this.embedded) {
+              this.saveActions()
             }
-            .width('100%')
-            .padding({
-              left: $r('app.float.space_page_h'),
-              right: $r('app.float.space_page_h'),
-              top: 12,
-              bottom: 24,
-            })
+
+            this.formCard()
           }
           .width('100%')
+          .padding({
+            left: $r('app.float.space_page_h'),
+            right: $r('app.float.space_page_h'),
+            top: this.embedded ? 8 : 12,
+            bottom: 16,
+          })
         }
         .clip(false)
         .edgeEffect(EdgeEffect.Spring)
+        .width('100%')
         .layoutWeight(1)
         .align(Alignment.TopStart)
         .contentStartOffset(this.embedded ? 0 : HDS_MINI_TITLE_INSET_VP)
-
-        this.bottomBar()
+        .contentEndOffset(this.embedded ? 8 : this.safeBottomVp)
       }
     }
     .width('100%')
@@ -1673,31 +1802,59 @@ export struct DeviceEditor {
       }
       .width('100%')
       .height('100%')
-      .bindSheet($$this.showPresetPicker, this.presetPickerBuilder(), {
+      .bindSheet($$this.showEditorSheet, this.editorSheetBuilder(), {
         height: SheetSize.FIT_CONTENT,
         dragBar: true,
         showClose: true,
+        preferType: SheetType.BOTTOM,
         backgroundColor: $r('app.color.surface_card'),
       })
     } else {
       HdsNavDestination() {
         this.editorBody()
       }
-      .titleBar(hdsOverlayTitleBar({
-        title: { mainTitle: this.editorPageTitle() },
-      }))
+      .titleBar(this.preferSplit
+        ? hdsOverlayTitleBar({
+          title: { mainTitle: this.editorPageTitle() },
+        })
+        : hdsOverlayTitleBar({
+          title: { mainTitle: this.editorPageTitle() },
+          menu: {
+            value: [
+              {
+                content: {
+                  label: $r('app.string.action_save'),
+                  icon: this.saveIcon,
+                  isEnabled: !this.pairBusy,
+                  action: () => {
+                    this.openSavePrompt(false);
+                  },
+                },
+              },
+            ],
+          },
+        }))
       .hideTitleBar(false)
       .bindToScrollable([this.formScroller])
       .backgroundColor(Color.Transparent)
-      .bindSheet($$this.showPresetPicker, this.presetPickerBuilder(), {
+      .bindSheet($$this.showEditorSheet, this.editorSheetBuilder(), {
         height: SheetSize.FIT_CONTENT,
         dragBar: true,
         showClose: true,
+        preferType: SheetType.BOTTOM,
         backgroundColor: $r('app.color.surface_card'),
       })
       .onBackPressed(() => {
         if (this.qrDialogNode !== undefined || this.qrWaiting) {
           this.dismissQrDialog();
+          return true;
+        }
+        if (this.showEditorSheet) {
+          this.closeEditorSheet();
+          return true;
+        }
+        if (!this.preferSplit) {
+          this.openSavePrompt(true);
           return true;
         }
         this.pathStack.pop();

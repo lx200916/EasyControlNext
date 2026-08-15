@@ -1,7 +1,7 @@
 {
   "app": {
-    "bundleName": "com.shiyunjin.easycontrolnext",
-    "vendor": "shiyunjin",
+    "bundleName": "fun.saltedfish.easycontrol.next",
+    "vendor": "saltedfish",
     "versionCode": 1000000,
     "versionName": "1.0.0",
     "icon": "$media:layered_image",

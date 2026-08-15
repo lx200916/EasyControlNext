@@ -22,9 +22,9 @@
 
   <!-- Connection presets -->
   <string name="set_presets">Connection presets</string>
-  <string name="set_presets_detail">Manage mirroring profiles for remote, camera, and single-app</string>
+  <string name="set_presets_detail">Manage mirroring profiles for remote, camera, single-app, and weak-network low-latency</string>
   <string name="preset_title">Connection presets</string>
-  <string name="preset_subtitle">Profiles for display, camera, and single-app mirroring</string>
+  <string name="preset_subtitle">Profiles for display, camera, single-app, and weak-network low-latency</string>
   <string name="preset_default_hint">Default preset fills and links new devices. Apply on a device links it; Manage → Apply preset is this session only. Editing a preset asks whether to update linked devices.</string>
   <string name="preset_create">New preset</string>
   <string name="preset_edit">Edit preset</string>
@@ -36,6 +36,8 @@
   <string name="preset_builtin_normal">Normal remote</string>
   <string name="preset_builtin_camera">Camera monitor</string>
   <string name="preset_builtin_single_app">Single-app</string>
+  <string name="preset_builtin_weak">Weak network</string>
+  <string name="preset_builtin_weak_detail">Prefers low latency on poor networks: 1280 · 30fps · 2Mbps · HEVC Main · audio off</string>
   <string name="preset_badge_default">Default</string>
   <string name="preset_badge_builtin">Built-in</string>
   <string name="preset_set_default">Set default</string>
@@ -101,7 +103,7 @@
   <string name="set_section_general">General</string>
   <string name="set_section_diagnostics">Diagnostics</string>
   <string name="set_section_about">About</string>
-  <string name="set_section_connection_detail">Presets, IP addresses, and ADB keys</string>
+  <string name="set_section_connection_detail">Presets, IP addresses, probe timeout, ADB keys, and local decoders</string>
   <string name="set_section_general_detail">Language and app preferences</string>
   <string name="set_section_diagnostics_detail">Error logs and troubleshooting</string>
   <string name="set_section_about_detail">Version and project homepage</string>
@@ -111,6 +113,9 @@
   <string name="set_other_reset_key_detail">Generate a new key pair and discard the current one</string>
   <string name="set_other_ip">IP addresses</string>
   <string name="set_other_ip_detail">Show this device\'s IPv4 / IPv6 addresses</string>
+  <string name="set_reachability_timeout">Pre-connect probe timeout</string>
+  <string name="set_reachability_timeout_detail">How long to wait when checking whether the device IP and port are reachable. Timed-out probes fail immediately instead of hanging.</string>
+  <string name="set_reachability_timeout_option">%1$d ms</string>
   <string name="set_other_locale">Change language (中文 / English)</string>
   <string name="set_other_locale_detail">Toggle app language; restart may be required</string>
   <string name="set_other_error_log">Error logs</string>
@@ -119,6 +124,22 @@
   <string name="set_about_website_detail">Open the EasyControlNext GitHub repository</string>
   <string name="set_about_privacy">Privacy Policy</string>
   <string name="set_about_version">Version</string>
+  <string name="set_decode_caps">Local hardware decode</string>
+  <string name="set_decode_caps_detail">Codecs this device can hardware-decode. Used when choosing H.264 / H.265 profiles.</string>
+  <string name="set_decode_caps_refresh">Refresh</string>
+  <string name="set_decode_caps_probing">Detecting…</string>
+  <string name="set_decode_caps_supported">Supported</string>
+  <string name="set_decode_caps_unsupported">Not supported</string>
+  <string name="set_decode_caps_hw">Hardware</string>
+  <string name="set_decode_caps_sw">Software only</string>
+  <string name="set_decode_caps_avc">H.264 / AVC</string>
+  <string name="set_decode_caps_hevc">H.265 / HEVC</string>
+  <string name="set_decode_caps_av1">AV1</string>
+  <string name="set_decode_caps_opus">Opus</string>
+  <string name="set_decode_caps_aac">AAC</string>
+  <string name="set_decode_caps_hevc_main">Main8</string>
+  <string name="set_decode_caps_hevc_main10">Main10</string>
+  <string name="set_decode_caps_hevc_profiles">Profiles: %1$s</string>
 
   <!-- 查看IP地址页面 -->
   <string name="ip_ipv4">IPv4(Touch to copy)</string>
@@ -144,6 +165,24 @@
   <string name="device_editor_section_on_running">While running</string>
   <string name="device_editor_section_on_close">On disconnect</string>
   <string name="device_editor_advanced_hint">All original EasyControl device options</string>
+  <string name="device_connect_port">Connect port</string>
+  <string name="device_connect_port_placeholder">Port at the top of Wireless debugging</string>
+  <string name="device_connect_port_hint">Not the pairing-dialog port. On Android 11+ this is usually not 5555.</string>
+  <string name="qr_pair_title">QR pairing</string>
+  <string name="qr_pair_hint">On the controlled phone: Developer options → Wireless debugging → Pair device with QR code, then scan this code. The QR has no IP or connect port — those are filled from the LAN after pairing.</string>
+  <string name="qr_pair_waiting">Waiting for the phone to scan…</string>
+  <string name="qr_pair_waiting_keep_open">Waiting for scan… (keep this QR open)</string>
+  <string name="qr_pair_found_pairing">Device found, pairing…</string>
+  <string name="qr_pair_discovering_port">Paired. Looking up the ADB connect port…</string>
+  <string name="qr_pair_success_filled">QR pairing succeeded. Filled %1$s:%2$d</string>
+  <string name="qr_pair_success_filled_classic">Paired with %1$s. No wireless-debug connect port was advertised; filled reachable 5555. If Wireless debugging shows a different port at the top, use that instead.</string>
+  <string name="qr_pair_success_need_port">Paired with %1$s. The QR has no connect port — open Wireless debugging and copy the IP:port at the top (not the pairing-code port).</string>
+  <string name="qr_pair_success_toast">Paired</string>
+  <string name="qr_pair_timeout">Pairing timed out</string>
+  <string name="qr_pair_failed">QR pairing failed</string>
+  <string name="qr_pair_close">Close</string>
+  <string name="pair_success_filled">Paired. Filled connect port %1$d</string>
+  <string name="pair_success_need_port">Paired. Open Wireless debugging and fill the connect port at the top (not the pairing-code port).</string>
   <string name="device_uuid">Touch to copy ID</string>
   <string name="device_name">Name</string>
   <string name="device_name_hint">Can NOT be empty</string>
@@ -235,7 +274,7 @@
   <string name="device_use_h265">H265</string>
   <string name="device_use_h265_detail">Enable H265 when available. Disable it when encountered display issues.</string>
   <string name="device_hevc_profile">HEVC profile</string>
-  <string name="device_hevc_profile_detail">Bit depth for H.265. Main (8-bit) is enough for most cases; Main10 needs support on both devices.</string>
+  <string name="device_hevc_profile_detail">Bit depth for H.265. Main (8-bit) stays 8-bit even if both sides support Main10. Main10 is used only when you select it (or Auto) and both sides support it.</string>
   <string name="device_hevc_profile_auto">Auto (Main10 if available)</string>
   <string name="device_hevc_profile_main">Main (8-bit)</string>
   <string name="device_hevc_profile_main10">Main10 (10-bit)</string>
@@ -265,6 +304,7 @@
   <string name="toast_no_browser">No default browser</string>
   <string name="toast_address_error">Address format error</string>
   <string name="toast_timeout">Timeout</string>
+  <string name="toast_host_unreachable">Unreachable %1$s:%2$d (no response within %3$d ms). Check the IP, port, and that the device is on the same network.</string>
   <string name="toast_connect_server">Failed to connect</string>
   <string name="toast_stream_closed">Disconnected</string>
   <string name="toast_float_per">Need floating window permission</string>

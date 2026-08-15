@@ -31,6 +31,7 @@ public class ClientStream {
   private BufferStream videoBufferStream;
   private BufferStream shell;
   private Thread connectThread = null;
+  private final Object mainWriteLock = new Object();
   private static final String serverName = "/data/local/tmp/easycontrolnext_server_" + BuildConfig.VERSION_CODE + ".jar";
   private static final boolean supportH265 = DecodecTools.isSupportH265();
   private static final boolean supportOpus = DecodecTools.isSupportOpus();
@@ -168,6 +169,11 @@ public class ClientStream {
     if (device.useH265 && supportH265) {
       hevcProfile = DecodecTools.resolveRequestedHevcProfile(hevcPref);
     }
+    // Explicit Main (8-bit) must never be upgraded, even if this device decodes Main10.
+    if (DecodecTools.HEVC_PREF_MAIN.equals(hevcPref)
+      && DecodecTools.HEVC_PROFILE_MAIN10.equals(hevcProfile)) {
+      hevcProfile = DecodecTools.HEVC_PROFILE_MAIN;
+    }
     boolean enableH265 = !DecodecTools.HEVC_PROFILE_NONE.equals(hevcProfile);
     if (DecodecTools.HEVC_PREF_MAIN10.equals(hevcPref)
       && enableH265
@@ -231,10 +237,12 @@ public class ClientStream {
           if (!mainConn) {
             mainSocket = new Socket();
             mainSocket.connect(inetSocketAddress, timeoutDelay / 2);
+            trySetTcpNoDelay(mainSocket);
             mainConn = true;
           }
           videoSocket = new Socket();
           videoSocket.connect(inetSocketAddress, timeoutDelay / 2);
+          trySetTcpNoDelay(videoSocket);
           mainOutputStream = mainSocket.getOutputStream();
           mainDataInputStream = new DataInputStream(mainSocket.getInputStream());
           videoDataInputStream = new DataInputStream(videoSocket.getInputStream());
@@ -316,8 +324,19 @@ public class ClientStream {
   }
 
   public void writeToMain(ByteBuffer byteBuffer) throws Exception {
-    if (connectDirect) mainOutputStream.write(byteBuffer.array());
-    else mainBufferStream.write(byteBuffer);
+    if (byteBuffer == null) return;
+    synchronized (mainWriteLock) {
+      if (connectDirect) mainOutputStream.write(byteBuffer.array());
+      else mainBufferStream.write(byteBuffer);
+    }
+  }
+
+  static void trySetTcpNoDelay(Socket socket) {
+    if (socket == null) return;
+    try {
+      socket.setTcpNoDelay(true);
+    } catch (Exception ignored) {
+    }
   }
 
   public void close() {

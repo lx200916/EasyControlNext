@@ -100,4 +100,17 @@ public final class ControlPacket {
     return byteBuffer;
   }
 
+  /**
+   * Type 10 stream QoS: request IDR and/or report estimated arrival delay.
+   * Layout: {@code u8 type=10}, {@code u8 flags} (bit0 = request IDR), {@code i32 delayMs}.
+   */
+  public static ByteBuffer createStreamFeedback(boolean requestIdr, int arrivalDelayMs) {
+    ByteBuffer byteBuffer = ByteBuffer.allocate(6);
+    byteBuffer.put((byte) 10);
+    byteBuffer.put((byte) (requestIdr ? 1 : 0));
+    byteBuffer.putInt(Math.max(0, arrivalDelayMs));
+    byteBuffer.flip();
+    return byteBuffer;
+  }
+
 }

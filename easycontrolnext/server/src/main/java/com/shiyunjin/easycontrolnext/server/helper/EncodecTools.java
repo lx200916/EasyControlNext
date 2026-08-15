@@ -26,8 +26,7 @@ public class EncodecTools {
       if (mediaCodecInfo.isEncoder()) {
         String codecName = mediaCodecInfo.getName();
         if (codecName.toLowerCase().contains("opus")) opusEncodecList.add(codecName);
-        // 要求硬件实现
-        if (!codecName.startsWith("OMX.google") && !codecName.startsWith("c2.android")) {
+        if (!isSoftwareCodec(codecName)) {
           for (String supportType : mediaCodecInfo.getSupportedTypes()) {
             if (Objects.equals(supportType, MediaFormat.MIMETYPE_VIDEO_HEVC)) hevcEncodecList.add(codecName);
           }
@@ -44,7 +43,7 @@ public class EncodecTools {
     for (MediaCodecInfo info : mediaCodecList.getCodecInfos()) {
       if (!info.isEncoder()) continue;
       String codecName = info.getName();
-      if (codecName.startsWith("OMX.google") || codecName.startsWith("c2.android")) continue;
+      if (isSoftwareCodec(codecName)) continue;
       try {
         for (String type : info.getSupportedTypes()) {
           if (!Objects.equals(type, MediaFormat.MIMETYPE_VIDEO_HEVC)) continue;
@@ -99,7 +98,7 @@ public class EncodecTools {
     for (MediaCodecInfo info : mediaCodecList.getCodecInfos()) {
       if (!info.isEncoder()) continue;
       String codecName = info.getName();
-      if (codecName.startsWith("OMX.google") || codecName.startsWith("c2.android")) continue;
+      if (isSoftwareCodec(codecName)) continue;
       try {
         for (String type : info.getSupportedTypes()) {
           if (!Objects.equals(type, MediaFormat.MIMETYPE_VIDEO_HEVC)) continue;
@@ -119,17 +118,71 @@ public class EncodecTools {
 
   /**
    * Intersect client-requested profile with local encode capability.
+   * Main is never upgraded to Main10. Main10 falls back to Main only when Main10 is unsupported.
    * @return main10 | main | 0
    */
   public static String intersectHevcProfile(String requested) {
     if (!isSupportH265()) return HEVC_PROFILE_NONE;
     if (requested == null) requested = HEVC_PROFILE_NONE;
     String req = requested.trim().toLowerCase();
-    boolean wantMain10 = HEVC_PROFILE_MAIN10.equals(req) || "2".equals(req);
-    boolean wantMain = HEVC_PROFILE_MAIN.equals(req) || "1".equals(req) || wantMain10;
     if (HEVC_PROFILE_NONE.equals(req) || "0".equals(req)) return HEVC_PROFILE_NONE;
-    if (wantMain10 && isSupportHevcMain10()) return HEVC_PROFILE_MAIN10;
-    if (wantMain && (isSupportHevcMain() || isSupportHevcMain10())) return HEVC_PROFILE_MAIN;
-    return HEVC_PROFILE_NONE;
+    boolean wantMain10 = HEVC_PROFILE_MAIN10.equals(req) || "2".equals(req) || "auto".equals(req);
+    if (wantMain10) {
+      if (isSupportHevcMain10()) return HEVC_PROFILE_MAIN10;
+      if (isSupportHevcMain()) return HEVC_PROFILE_MAIN;
+      // HW HEVC with omitted profileLevels still counts as Main via probe fallback.
+      return isSupportH265() ? HEVC_PROFILE_MAIN : HEVC_PROFILE_NONE;
+    }
+    // Explicit Main (8-bit) or any other value: never upgrade to Main10.
+    return HEVC_PROFILE_MAIN;
+  }
+
+  /**
+   * Hardware HEVC encoder that advertises {@code profileId}, preferring c2.
+   * For Main, may return any HW HEVC encoder so KEY_PROFILE can still be tried;
+   * caller must reject a Main10 output.
+   */
+  public static String findHevcEncoderForProfile(int profileId) {
+    ArrayList<String> exact = new ArrayList<>();
+    ArrayList<String> any = new ArrayList<>();
+    MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
+    for (MediaCodecInfo info : mediaCodecList.getCodecInfos()) {
+      if (!info.isEncoder()) continue;
+      String codecName = info.getName();
+      if (isSoftwareCodec(codecName)) continue;
+      try {
+        for (String type : info.getSupportedTypes()) {
+          if (!Objects.equals(type, MediaFormat.MIMETYPE_VIDEO_HEVC)) continue;
+          if (!any.contains(codecName)) any.add(codecName);
+          MediaCodecInfo.CodecCapabilities caps = info.getCapabilitiesForType(type);
+          if (caps == null || caps.profileLevels == null) continue;
+          for (MediaCodecInfo.CodecProfileLevel pl : caps.profileLevels) {
+            if (pl.profile == profileId && !exact.contains(codecName)) {
+              exact.add(codecName);
+              break;
+            }
+          }
+        }
+      } catch (Exception ignored) {
+      }
+    }
+    if (!exact.isEmpty()) return preferC2(exact);
+    if (profileId == MediaCodecInfo.CodecProfileLevel.HEVCProfileMain && !any.isEmpty()) {
+      return preferC2(any);
+    }
+    return "";
+  }
+
+  private static String preferC2(ArrayList<String> names) {
+    for (String name : names) {
+      if (name.contains("c2")) return name;
+    }
+    return names.get(0);
+  }
+
+  static boolean isSoftwareCodec(String codecName) {
+    if (codecName == null) return true;
+    String n = codecName.toLowerCase();
+    return n.startsWith("omx.google") || n.startsWith("c2.android") || n.contains(".sw.");
   }
 }

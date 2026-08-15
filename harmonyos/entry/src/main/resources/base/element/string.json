@@ -77,6 +77,22 @@
       "value": "保存并连接"
     },
     {
+      "name": "editor_save_prompt_title",
+      "value": "保存设备"
+    },
+    {
+      "name": "editor_leave_prompt_title",
+      "value": "保存此次更改？"
+    },
+    {
+      "name": "editor_save_prompt_hint",
+      "value": "保存后返回列表，或保存并立即连接。"
+    },
+    {
+      "name": "editor_discard",
+      "value": "不保存"
+    },
+    {
       "name": "detail_empty_title",
       "value": "选择一台设备"
     },

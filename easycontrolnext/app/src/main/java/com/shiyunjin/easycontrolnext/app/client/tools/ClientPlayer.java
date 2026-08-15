@@ -3,6 +3,7 @@ package com.shiyunjin.easycontrolnext.app.client.tools;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.SystemClock;
 import android.util.Pair;
 import android.view.Surface;
 
@@ -26,6 +27,13 @@ public class ClientPlayer {
   private static final int AUDIO_EVENT = 1;
   private static final int CLIPBOARD_EVENT = 2;
   private static final int CHANGE_SIZE_EVENT = 3;
+  private static final long IDR_REQUEST_MIN_INTERVAL_MS = 300;
+  private static final long DELAY_REPORT_INTERVAL_MS = 500;
+  private final Object feedbackLock = new Object();
+  private boolean pendingIdrRequest;
+  private int lastArrivalDelayMs;
+  private long lastIdrSentAt;
+  private long lastDelaySentAt;
 
   public ClientPlayer(String uuid, ClientStream clientStream) {
     clientController = Client.getClientController(uuid);
@@ -80,11 +88,50 @@ public class ClientPlayer {
       Surface surface = new Surface(clientController.getTextureView().getSurfaceTexture());
       ByteBuffer csd0 = clientStream.readFrameFromVideo();
       ByteBuffer csd1 = useH265 ? null : clientStream.readFrameFromVideo();
-      videoDecode = new VideoDecode(videoSize, surface, csd0, csd1, playHandler);
+      videoDecode = new VideoDecode(videoSize, surface, csd0, csd1, playHandler, new VideoDecode.Feedback() {
+        @Override
+        public void onNeedIdr() {
+          sendStreamFeedback(true, -1);
+        }
+
+        @Override
+        public void onArrivalDelayMs(int delayMs) {
+          sendStreamFeedback(false, delayMs);
+        }
+      });
       while (!Thread.interrupted()) videoDecode.decodeIn(clientStream.readFrameFromVideo());
     } catch (Exception ignored) {
     } finally {
       if (videoDecode != null) videoDecode.release();
+    }
+  }
+
+  /**
+   * Main-channel type 10: flags (bit0=request IDR) + arrival-delay ms.
+   * Rate-limited so a backlog does not flood the control socket.
+   */
+  private void sendStreamFeedback(boolean requestIdr, int arrivalDelayMs) {
+    boolean sendIdr = false;
+    int delayToSend = -1;
+    long now = SystemClock.elapsedRealtime();
+    synchronized (feedbackLock) {
+      if (requestIdr) pendingIdrRequest = true;
+      if (arrivalDelayMs >= 0) lastArrivalDelayMs = arrivalDelayMs;
+      if (pendingIdrRequest && now - lastIdrSentAt >= IDR_REQUEST_MIN_INTERVAL_MS) {
+        sendIdr = true;
+        pendingIdrRequest = false;
+        lastIdrSentAt = now;
+      }
+      boolean delayDue = now - lastDelaySentAt >= DELAY_REPORT_INTERVAL_MS;
+      if (delayDue || sendIdr) {
+        delayToSend = Math.max(0, lastArrivalDelayMs);
+        if (delayDue) lastDelaySentAt = now;
+      }
+      if (!sendIdr && !delayDue) return;
+    }
+    try {
+      clientStream.writeToMain(ControlPacket.createStreamFeedback(sendIdr, Math.max(0, delayToSend)));
+    } catch (Exception ignored) {
     }
   }
 

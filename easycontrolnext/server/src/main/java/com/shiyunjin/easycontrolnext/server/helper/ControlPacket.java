@@ -12,15 +12,16 @@ import com.shiyunjin.easycontrolnext.server.entity.Device;
 
 public final class ControlPacket {
 
-  public static void sendVideoEvent(long pts, ByteBuffer data) throws IOException {
+  /** @return video-socket write duration in milliseconds */
+  public static long sendVideoEvent(long pts, ByteBuffer data) throws IOException {
     int size = data.remaining() + 8;
-    if (size < 8) return;
+    if (size < 8) return 0;
     ByteBuffer byteBuffer = ByteBuffer.allocate(4 + size);
     byteBuffer.putInt(size);
     byteBuffer.putLong(pts);
     byteBuffer.put(data);
     byteBuffer.flip();
-    Server.writeVideo(byteBuffer);
+    return Server.writeVideo(byteBuffer);
   }
 
   public static void sendAudioEvent(ByteBuffer data) throws IOException {

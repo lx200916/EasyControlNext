@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VideoSettings
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -42,10 +43,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,10 +62,14 @@ import com.shiyunjin.easycontrolnext.app.AdbKeyActivity
 import com.shiyunjin.easycontrolnext.app.BuildConfig
 import com.shiyunjin.easycontrolnext.app.IpActivity
 import com.shiyunjin.easycontrolnext.app.R
+import com.shiyunjin.easycontrolnext.app.client.decode.DecodecTools
 import com.shiyunjin.easycontrolnext.app.entity.AppData
 import com.shiyunjin.easycontrolnext.app.entity.Setting
 import com.shiyunjin.easycontrolnext.app.helper.PublicTools
 import com.shiyunjin.easycontrolnext.app.ui.theme.AccentBlue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class SettingsPane {
   Connection,
@@ -392,6 +399,137 @@ private fun SettingsConnectionContent(
     detail = stringResource(R.string.set_other_reset_key_detail),
     onClick = onResetKey,
   )
+  SettingsDivider()
+  SettingsDecoderCapsRow()
+}
+
+@Composable
+private fun SettingsDecoderCapsRow() {
+  var caps by remember { mutableStateOf<DecodecTools.LocalDecoderCaps?>(null) }
+  var probing by remember { mutableStateOf(true) }
+  val scope = rememberCoroutineScope()
+
+  fun refresh() {
+    probing = true
+    scope.launch {
+      val result = withContext(Dispatchers.Default) {
+        DecodecTools.probeLocalDecoderCaps()
+      }
+      caps = result
+      probing = false
+    }
+  }
+
+  LaunchedEffect(Unit) { refresh() }
+
+  val supported = stringResource(R.string.set_decode_caps_supported)
+  val unsupported = stringResource(R.string.set_decode_caps_unsupported)
+  val hw = stringResource(R.string.set_decode_caps_hw)
+  val sw = stringResource(R.string.set_decode_caps_sw)
+  val main8 = stringResource(R.string.set_decode_caps_hevc_main)
+  val main10 = stringResource(R.string.set_decode_caps_hevc_main10)
+
+  fun implLabel(hasHw: Boolean, hasSw: Boolean): String = when {
+    hasHw -> "$supported · $hw"
+    hasSw -> "$supported · $sw"
+    else -> unsupported
+  }
+
+  Column(
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(vertical = 10.dp),
+  ) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      Icon(
+        imageVector = Icons.Default.VideoSettings,
+        contentDescription = null,
+        tint = AccentBlue,
+        modifier = Modifier.size(22.dp),
+      )
+      Spacer(modifier = Modifier.width(14.dp))
+      Column(modifier = Modifier.weight(1f)) {
+        Text(
+          stringResource(R.string.set_decode_caps),
+          style = MaterialTheme.typography.titleSmall,
+          fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+          stringResource(R.string.set_decode_caps_detail),
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      Text(
+        text = stringResource(R.string.set_decode_caps_refresh),
+        style = MaterialTheme.typography.labelLarge,
+        color = if (probing) {
+          MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+          AccentBlue
+        },
+        modifier = Modifier
+          .clickable(enabled = !probing, onClick = { refresh() })
+          .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
+      )
+    }
+    Spacer(modifier = Modifier.height(10.dp))
+    if (probing && caps == null) {
+      Text(
+        stringResource(R.string.set_decode_caps_probing),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 36.dp),
+      )
+    } else {
+      val c = caps
+      if (c != null) {
+        val hevcProfiles = buildList {
+          if (c.hevcMain) add(main8)
+          if (c.hevcMain10) add(main10)
+        }.joinToString(" / ")
+        val hevcExtra = if ((c.hevcHw || c.hevcSw) && hevcProfiles.isNotEmpty()) {
+          stringResource(R.string.set_decode_caps_hevc_profiles, hevcProfiles)
+        } else {
+          null
+        }
+        Column(
+          modifier = Modifier.padding(start = 36.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+          DecoderCapLine(stringResource(R.string.set_decode_caps_avc), implLabel(c.avcHw, c.avcSw))
+          DecoderCapLine(
+            stringResource(R.string.set_decode_caps_hevc),
+            listOfNotNull(implLabel(c.hevcHw, c.hevcSw), hevcExtra).joinToString(" · "),
+          )
+          DecoderCapLine(stringResource(R.string.set_decode_caps_av1), implLabel(c.av1Hw, c.av1Sw))
+          DecoderCapLine(stringResource(R.string.set_decode_caps_opus), implLabel(c.opusHw, c.opusSw))
+          DecoderCapLine(stringResource(R.string.set_decode_caps_aac), implLabel(c.aacHw, c.aacSw))
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun DecoderCapLine(title: String, status: String) {
+  Row(
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.SpaceBetween,
+  ) {
+    Text(
+      title,
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurface,
+    )
+    Spacer(modifier = Modifier.width(12.dp))
+    Text(
+      status,
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+  }
 }
 
 @Composable

@@ -39,6 +39,7 @@ public final class VideoEncode {
 
   public static void init() throws InvocationTargetException, NoSuchMethodException, IllegalAccessException, IOException, ErrnoException {
     resolveCodecChoice();
+    StreamAdapt.init(Options.maxVideoBit, Options.maxFps);
     // Configure (with Main10→Main→AVC fallback) before announcing codec to the client.
     prepareEncoderWithFallback();
     ByteBuffer byteBuffer = ByteBuffer.allocate(9);
@@ -55,7 +56,7 @@ public final class VideoEncode {
 
   /**
    * Intersect client hevcProfile request with local HW encode caps.
-   * Prefer Main10 when both sides support it.
+   * Main is never upgraded to Main10; Main10 falls back to Main when encode cannot do Main10.
    */
   private static void resolveCodecChoice() {
     String requested = Options.hevcProfile;
@@ -95,20 +96,37 @@ public final class VideoEncode {
       }
       encedec = null;
     }
-    encedec = MediaCodec.createEncoderByType(codecMime);
+    if (useH265 && hevcProfileId != 0) {
+      String encoderName = EncodecTools.findHevcEncoderForProfile(hevcProfileId);
+      if (encoderName != null && !encoderName.isEmpty()) {
+        encedec = MediaCodec.createByCodecName(encoderName);
+        System.out.println("VideoEncode: encoder=" + encoderName + " for profile=" + hevcProfile);
+      } else {
+        encedec = MediaCodec.createEncoderByType(codecMime);
+      }
+    } else {
+      encedec = MediaCodec.createEncoderByType(codecMime);
+    }
     encodecFormat = new MediaFormat();
     encodecFormat.setString(MediaFormat.KEY_MIME, codecMime);
-    encodecFormat.setInteger(MediaFormat.KEY_BIT_RATE, Options.maxVideoBit);
+    encodecFormat.setInteger(MediaFormat.KEY_BIT_RATE, StreamAdapt.bitrateForFormat(Options.maxVideoBit));
     encodecFormat.setInteger(MediaFormat.KEY_FRAME_RATE, Options.maxFps);
     encodecFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 10);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) encodecFormat.setInteger(MediaFormat.KEY_INTRA_REFRESH_PERIOD, Options.maxFps * 3);
-    encodecFormat.setFloat("max-fps-to-encoder", Options.maxFps);
+    encodecFormat.setFloat("max-fps-to-encoder", StreamAdapt.fpsForFormat(Options.maxFps));
     encodecFormat.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 50_000);
     encodecFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
     if (useH265 && hevcProfileId != 0) {
       encodecFormat.setInteger(MediaFormat.KEY_PROFILE, hevcProfileId);
       if (setLevel && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         encodecFormat.setInteger(MediaFormat.KEY_LEVEL, EncodecTools.getHevcMaxLevel(hevcProfileId));
+      }
+      // Force SDR / 8-bit signaling so Main is not silently promoted to Main10.
+      if (hevcProfileId == MediaCodecInfo.CodecProfileLevel.HEVCProfileMain
+        && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        encodecFormat.setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709);
+        encodecFormat.setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO);
+        encodecFormat.setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED);
       }
     }
     isConfigured = false;
@@ -138,6 +156,10 @@ public final class VideoEncode {
       encodecFormat.setInteger(MediaFormat.KEY_WIDTH, Device.videoSize.first);
       encodecFormat.setInteger(MediaFormat.KEY_HEIGHT, Device.videoSize.second);
       encedec.configure(encodecFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+      if (useH265 && EncodecTools.HEVC_PROFILE_MAIN.equals(hevcProfile) && outputIsHevcMain10(encedec)) {
+        System.out.println("VideoEncode: encoder ignored KEY_PROFILE=Main and selected Main10 — reject");
+        throw new IOException("encoder produced Main10 for Main request");
+      }
       isConfigured = true;
       System.out.println("VideoEncode: configured ok useH265=" + useH265 + " hevcProfile=" + hevcProfile
         + (useH265 ? (" profileId=" + hevcProfileId + " setLevel=" + setLevel) : ""));
@@ -157,6 +179,27 @@ public final class VideoEncode {
       isConfigured = false;
       return false;
     }
+  }
+
+  /** True when the configured encoder reports Main10 despite a Main request. */
+  private static boolean outputIsHevcMain10(MediaCodec codec) {
+    try {
+      return isHevcMain10Profile(codec.getOutputFormat());
+    } catch (Exception ignored) {
+      return false;
+    }
+  }
+
+  private static boolean isHevcMain10Profile(MediaFormat format) {
+    if (format == null || !format.containsKey(MediaFormat.KEY_PROFILE)) return false;
+    int profile = format.getInteger(MediaFormat.KEY_PROFILE);
+    if (profile == MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10) return true;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+      && profile == MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10HDR10) {
+      return true;
+    }
+    return Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+      && profile == MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10HDR10Plus;
   }
 
   /** @return true if a lower choice remains to try */
@@ -302,15 +345,29 @@ public final class VideoEncode {
 
   public static void encodeOut() throws IOException {
     try {
+      StreamAdapt.applyPending(encedec);
       // 找到已完成的输出缓冲区
       int outIndex;
       do outIndex = encedec.dequeueOutputBuffer(bufferInfo, -1); while (outIndex < 0);
       ByteBuffer buffer = encedec.getOutputBuffer(outIndex);
       if (buffer == null) return;
-      ControlPacket.sendVideoEvent(bufferInfo.presentationTimeUs, buffer);
+      boolean isConfig = (bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0;
+      boolean isKey = (bufferInfo.flags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0;
+      if (StreamAdapt.shouldDropNonKey() && !isConfig && !isKey) {
+        encedec.releaseOutputBuffer(outIndex, false);
+        StreamAdapt.applyPending(encedec);
+        return;
+      }
+      if (isKey) StreamAdapt.onKeyFrameSent();
+      StreamAdapt.onWriteMs(ControlPacket.sendVideoEvent(bufferInfo.presentationTimeUs, buffer));
+      StreamAdapt.applyPending(encedec);
       encedec.releaseOutputBuffer(outIndex, false);
     } catch (IllegalStateException ignored) {
     }
+  }
+
+  public static void onClientFeedback(boolean requestIdr, int arrivalDelayMs) {
+    StreamAdapt.onClientFeedback(requestIdr, arrivalDelayMs);
   }
 
   public static void release() {

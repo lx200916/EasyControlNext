@@ -4,7 +4,11 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import java.net.Inet4Address
+import java.net.InetAddress
+import java.util.ArrayDeque
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -38,38 +42,60 @@ object AdbServiceDiscovery {
     val nsd = context.applicationContext.getSystemService(Context.NSD_SERVICE) as NsdManager
     val found = LinkedHashMap<String, Endpoint>()
     val lock = Any()
-    val done = AtomicBoolean(false)
+    val finished = AtomicBoolean(false)
     val latch = CountDownLatch(1)
+    val mainHandler = Handler(Looper.getMainLooper())
+    val pending = ArrayDeque<NsdServiceInfo>()
+    val resolving = AtomicBoolean(false)
 
-    val resolveListener = object : NsdManager.ResolveListener {
-      override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {}
+    fun accept(info: NsdServiceInfo) {
+      if (finished.get()) return
+      val name = info.serviceName ?: return
+      if (!serviceNameMatches(name, serviceNameFilter)) return
+      val ip = preferredHost(hostsOf(info)) ?: return
+      val port = info.port
+      if (port <= 0) return
+      synchronized(lock) {
+        found["$ip:$port:$name"] = Endpoint(ip, port, name, type)
+      }
+      if (!serviceNameFilter.isNullOrBlank()) {
+        latch.countDown()
+      }
+    }
 
-      override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-        if (done.get()) return
-        val name = serviceInfo.serviceName ?: return
-        if (!serviceNameFilter.isNullOrBlank() &&
-          !name.equals(serviceNameFilter, ignoreCase = true) &&
-          !name.contains(serviceNameFilter, ignoreCase = true)
-        ) {
-          return
+    fun pumpResolve() {
+      if (finished.get()) return
+      val next: NsdServiceInfo
+      synchronized(lock) {
+        if (resolving.get()) return
+        val queued = pending.pollFirst() ?: return
+        resolving.set(true)
+        next = queued
+      }
+      // NsdManager.resolveService cannot reuse one listener; serialize in-flight resolves.
+      val listener = object : NsdManager.ResolveListener {
+        override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+          resolving.set(false)
+          pumpResolve()
         }
-        val host = serviceInfo.host ?: return
-        // Prefer IPv4
-        val ip = if (host is Inet4Address) {
-          host.hostAddress
-        } else {
-          host.hostAddress
-        } ?: return
-        val port = serviceInfo.port
-        if (port <= 0) return
-        synchronized(lock) {
-          found["$ip:$port:$name"] = Endpoint(ip, port, name, type)
-        }
-        if (!serviceNameFilter.isNullOrBlank()) {
-          done.set(true)
-          latch.countDown()
+
+        override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+          accept(serviceInfo)
+          resolving.set(false)
+          pumpResolve()
         }
       }
+      val start = Runnable {
+        try {
+          @Suppress("DEPRECATION")
+          nsd.resolveService(next, listener)
+        } catch (_: Exception) {
+          resolving.set(false)
+          pumpResolve()
+        }
+      }
+      if (Looper.myLooper() == Looper.getMainLooper()) start.run()
+      else mainHandler.post(start)
     }
 
     val discoveryListener = object : NsdManager.DiscoveryListener {
@@ -82,18 +108,11 @@ object AdbServiceDiscovery {
       override fun onDiscoveryStopped(serviceType: String) {}
 
       override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-        if (done.get()) return
+        if (finished.get()) return
         val name = serviceInfo.serviceName ?: return
-        if (!serviceNameFilter.isNullOrBlank() &&
-          !name.equals(serviceNameFilter, ignoreCase = true) &&
-          !name.contains(serviceNameFilter, ignoreCase = true)
-        ) {
-          return
-        }
-        try {
-          nsd.resolveService(serviceInfo, resolveListener)
-        } catch (_: Exception) {
-        }
+        if (!serviceNameMatches(name, serviceNameFilter)) return
+        synchronized(lock) { pending.addLast(serviceInfo) }
+        pumpResolve()
       }
 
       override fun onServiceLost(serviceInfo: NsdServiceInfo) {}
@@ -101,10 +120,16 @@ object AdbServiceDiscovery {
 
     try {
       nsd.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
-      latch.await(timeoutMs, TimeUnit.MILLISECONDS)
+      latch.await(timeoutMs.coerceAtLeast(500L), TimeUnit.MILLISECONDS)
+      // Resolves often finish after the discover window; keep collecting briefly.
+      try {
+        Thread.sleep(700)
+      } catch (e: InterruptedException) {
+        Thread.currentThread().interrupt()
+      }
     } catch (_: Exception) {
     } finally {
-      done.set(true)
+      finished.set(true)
       try {
         nsd.stopServiceDiscovery(discoveryListener)
       } catch (_: Exception) {
@@ -130,7 +155,65 @@ object AdbServiceDiscovery {
     timeoutMs: Long,
   ): Endpoint? {
     val all = discover(context, Type.CONNECT, timeoutMs, null)
+    if (all.isEmpty()) return null
     if (host.isNullOrBlank()) return all.firstOrNull()
-    return all.firstOrNull { it.host == host } ?: all.firstOrNull()
+    all.firstOrNull { hostsMatch(it.host, host) }?.let { return it }
+    val want = normalizeHost(host)
+    if (want.count { it == '.' } == 3) {
+      val prefix = want.substringBeforeLast('.')
+      all.firstOrNull { normalizeHost(it.host).startsWith("$prefix.") }?.let { return it }
+    }
+    return all.firstOrNull()
+  }
+
+  fun hostsMatch(a: String?, b: String?): Boolean {
+    if (a.isNullOrBlank() || b.isNullOrBlank()) return false
+    if (a.equals(b, ignoreCase = true)) return true
+    val na = normalizeHost(a)
+    val nb = normalizeHost(b)
+    if (na.equals(nb, ignoreCase = true)) return true
+    return try {
+      InetAddress.getByName(na) == InetAddress.getByName(nb)
+    } catch (_: Exception) {
+      false
+    }
+  }
+
+  fun normalizeHost(host: String): String {
+    var h = host.trim()
+    if (h.startsWith("[") && h.endsWith("]")) {
+      h = h.substring(1, h.length - 1)
+    }
+    val zone = h.indexOf('%')
+    if (zone > 0) h = h.substring(0, zone)
+    if (h.startsWith("::ffff:") || h.startsWith("::FFFF:")) {
+      h = h.substring(7)
+    }
+    return h
+  }
+
+  private fun serviceNameMatches(name: String, filter: String?): Boolean {
+    if (filter.isNullOrBlank()) return true
+    return name.equals(filter, ignoreCase = true) || name.contains(filter, ignoreCase = true)
+  }
+
+  private fun hostsOf(info: NsdServiceInfo): List<InetAddress> {
+    val out = ArrayList<InetAddress>()
+    if (Build.VERSION.SDK_INT >= 34) {
+      try {
+        out.addAll(info.hostAddresses)
+      } catch (_: Exception) {
+      }
+    }
+    @Suppress("DEPRECATION")
+    info.host?.let { addr ->
+      if (out.none { it == addr }) out.add(addr)
+    }
+    return out
+  }
+
+  private fun preferredHost(addrs: List<InetAddress>): String? {
+    addrs.firstOrNull { it is Inet4Address }?.hostAddress?.let { return it }
+    return addrs.firstOrNull()?.hostAddress
   }
 }

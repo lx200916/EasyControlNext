@@ -18,7 +18,7 @@ import {
 
 const DOMAIN: number = 0x0001;
 const TAG: string = 'LiveMirror';
-const APP_VERSION_CODE: number = 10014;
+const APP_VERSION_CODE: number = 10015;
 
 export interface LiveStatus {
   phase: string;

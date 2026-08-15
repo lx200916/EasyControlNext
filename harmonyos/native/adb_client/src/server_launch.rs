@@ -19,7 +19,7 @@ use crate::transport::AdbTransport;
 pub const DEFAULT_SERVER_PORT: u16 = 25166;
 
 /// Fallback app `versionCode` when metadata is missing (matches current easycontrolnext/app).
-pub const DEFAULT_APP_VERSION_CODE: u32 = 10014;
+pub const DEFAULT_APP_VERSION_CODE: u32 = 10015;
 
 /// Options mirrored from `ClientStream.startServer()` / `Device` defaults.
 #[derive(Debug, Clone)]
@@ -339,7 +339,7 @@ mod tests {
     let opts = ServerLaunchOptions::default();
     let cmd = opts.app_process_command();
     assert!(cmd.starts_with(
-      "app_process -Djava.class.path=/data/local/tmp/easycontrolnext_server_10014.jar / com.shiyunjin.easycontrolnext.server.Server "
+      "app_process -Djava.class.path=/data/local/tmp/easycontrolnext_server_10015.jar / com.shiyunjin.easycontrolnext.server.Server "
     ));
     assert!(cmd.contains("serverPort=25166"));
     assert!(cmd.contains("listenClip=1"));

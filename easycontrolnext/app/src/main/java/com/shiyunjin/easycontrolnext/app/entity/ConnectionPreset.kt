@@ -83,10 +83,12 @@ data class ConnectionPreset(
     const val KEY_NORMAL_REMOTE = "normal_remote"
     const val KEY_CAMERA_MONITOR = "camera_monitor"
     const val KEY_SINGLE_APP = "single_app"
+    const val KEY_WEAK_NETWORK = "weak_network"
 
     const val ID_NORMAL_REMOTE = "builtin_normal_remote"
     const val ID_CAMERA_MONITOR = "builtin_camera_monitor"
     const val ID_SINGLE_APP = "builtin_single_app"
+    const val ID_WEAK_NETWORK = "builtin_weak_network"
 
     fun normalizeHevcProfile(value: String?): String {
       val v = value?.trim()?.lowercase().orEmpty()
@@ -159,6 +161,31 @@ data class ConnectionPreset(
       maxSize = 1600,
       maxFps = 60,
       maxVideoBit = 4,
+      useH265 = true,
+      hevcProfile = "main",
+      keepWakeOnRunning = true,
+      changeToFullOnConnect = false,
+      wakeOnConnect = true,
+      lightOffOnConnect = false,
+      showNavBarOnConnect = true,
+    )
+
+    /** Poor-network preset: chase live edge (1280 / 30fps / 2Mbps / HEVC Main / no audio). */
+    fun weakNetwork(name: String) = ConnectionPreset(
+      id = ID_WEAK_NETWORK,
+      name = name,
+      builtInKey = KEY_WEAK_NETWORK,
+      videoSource = "display",
+      cameraFacing = "back",
+      startApp = "",
+      virtualWidth = 0,
+      virtualHeight = 0,
+      virtualDpi = 0,
+      isAudio = false,
+      listenClip = true,
+      maxSize = 1280,
+      maxFps = 30,
+      maxVideoBit = 2,
       useH265 = true,
       hevcProfile = "main",
       keepWakeOnRunning = true,

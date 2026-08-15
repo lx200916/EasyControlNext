@@ -122,6 +122,8 @@ public final class Server {
     try (ServerSocket serverSocket = new ServerSocket(Options.serverPort)) {
       mainSocket = serverSocket.accept();
       videoSocket = serverSocket.accept();
+      trySetTcpNoDelay(mainSocket);
+      trySetTcpNoDelay(videoSocket);
       mainOutputStream = mainSocket.getOutputStream();
       videoOutputStream = videoSocket.getOutputStream();
       mainInputStream = new DataInputStream(mainSocket.getInputStream());
@@ -194,6 +196,11 @@ public final class Server {
           case 9:
             Device.changeResolution(mainInputStream.readInt(), mainInputStream.readInt());
             break;
+          case 10:
+            boolean requestIdr = (mainInputStream.readByte() & 1) != 0;
+            int arrivalDelayMs = mainInputStream.readInt();
+            VideoEncode.onClientFeedback(requestIdr, arrivalDelayMs);
+            break;
         }
       }
     } catch (Exception e) {
@@ -205,8 +212,19 @@ public final class Server {
     mainOutputStream.write(byteBuffer.array());
   }
 
-  public static void writeVideo(ByteBuffer byteBuffer) throws IOException {
+  /** @return write duration in milliseconds (proxy for send-buffer occupancy). */
+  public static long writeVideo(ByteBuffer byteBuffer) throws IOException {
+    long t0 = System.nanoTime();
     videoOutputStream.write(byteBuffer.array());
+    return (System.nanoTime() - t0) / 1_000_000L;
+  }
+
+  static void trySetTcpNoDelay(Socket socket) {
+    if (socket == null) return;
+    try {
+      socket.setTcpNoDelay(true);
+    } catch (Exception ignored) {
+    }
   }
 
   public static void errorClose(Exception e) {

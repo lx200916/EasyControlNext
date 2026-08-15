@@ -60,7 +60,7 @@ public final class Options {
           supportH265 = Integer.parseInt(value) == 1;
           break;
         case "hevcProfile":
-          hevcProfile = value == null || value.isEmpty() ? "main" : value.trim().toLowerCase();
+          hevcProfile = normalizeHevcProfile(value);
           break;
         case "supportOpus":
           supportOpus = Integer.parseInt(value) == 1;
@@ -89,5 +89,15 @@ public final class Options {
 
   public static boolean isCameraSource() {
     return "camera".equalsIgnoreCase(videoSource);
+  }
+
+  /** Wire value: {@code main10} | {@code main} | {@code 0} | {@code auto}. Unknown → main (never Main10). */
+  static String normalizeHevcProfile(String value) {
+    if (value == null || value.isEmpty()) return "main";
+    String v = value.trim().toLowerCase();
+    if ("2".equals(v)) return "main10";
+    if ("1".equals(v)) return "main";
+    if ("main10".equals(v) || "main".equals(v) || "0".equals(v) || "auto".equals(v)) return v;
+    return "main";
   }
 }

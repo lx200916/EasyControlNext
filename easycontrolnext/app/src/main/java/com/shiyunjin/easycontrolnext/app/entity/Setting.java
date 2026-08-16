@@ -27,6 +27,16 @@ public final class Setting {
     editor.apply();
   }
 
+  /** Controller device: keep local screen on while a control/mirror UI is visible. Default on. */
+  public boolean getKeepScreenOnDuringControl() {
+    return sharedPreferences.getBoolean("keepScreenOnDuringControl", true);
+  }
+
+  public void setKeepScreenOnDuringControl(boolean value) {
+    editor.putBoolean("keepScreenOnDuringControl", value);
+    editor.apply();
+  }
+
   public String getLocalUUID() {
     if (!sharedPreferences.contains("UUID")) {
       editor.putString("UUID", UUID.randomUUID().toString());

@@ -43,12 +43,24 @@ public class SmallView extends ViewOutlineProvider {
       WindowManager.LayoutParams.WRAP_CONTENT,
       WindowManager.LayoutParams.WRAP_CONTENT,
       Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE,
-      LayoutParamsFlagFocus,
+      layoutParamsFlagFocus(),
       PixelFormat.TRANSLUCENT
     );
 
-  private static final int LayoutParamsFlagFocus = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH;
-  private static final int LayoutParamsFlagNoFocus = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+  private static final int LayoutParamsFlagFocusBase = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH;
+  private static final int LayoutParamsFlagNoFocusBase = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+
+  private static int keepScreenOnFlag() {
+    return AppData.setting.getKeepScreenOnDuringControl() ? WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON : 0;
+  }
+
+  private static int layoutParamsFlagFocus() {
+    return LayoutParamsFlagFocusBase | keepScreenOnFlag();
+  }
+
+  private static int layoutParamsFlagNoFocus() {
+    return LayoutParamsFlagNoFocusBase | keepScreenOnFlag();
+  }
 
   public SmallView(String uuid) {
     device = Client.getDevice(uuid);
@@ -74,6 +86,7 @@ public class SmallView extends ViewOutlineProvider {
     smallView.barView.setVisibility(View.GONE);
     smallViewParams.x = device.smallX;
     smallViewParams.y = device.smallY;
+    smallViewParams.flags = layoutParamsFlagFocus();
     updateMaxSize();
     if (!Objects.equals(device.startApp, "")) {
       smallView.buttonHome.setVisibility(View.GONE);
@@ -106,13 +119,13 @@ public class SmallView extends ViewOutlineProvider {
     smallView.getRoot().setOnTouchHandle(event -> {
       if (event.getAction() == MotionEvent.ACTION_OUTSIDE) {
         if (device.smallToMiniOnRunning) clientController.handleAction("changeToMini", ByteBuffer.wrap("changeToSmall".getBytes()), 0);
-        else if (smallViewParams.flags != LayoutParamsFlagNoFocus) {
+        else if (smallViewParams.flags != layoutParamsFlagNoFocus()) {
           smallView.editText.clearFocus();
-          smallViewParams.flags = LayoutParamsFlagNoFocus;
+          smallViewParams.flags = layoutParamsFlagNoFocus();
           AppData.windowManager.updateViewLayout(smallView.getRoot(), smallViewParams);
         }
-      } else if (smallViewParams.flags != LayoutParamsFlagFocus) {
-        smallViewParams.flags = LayoutParamsFlagFocus;
+      } else if (smallViewParams.flags != layoutParamsFlagFocus()) {
+        smallViewParams.flags = layoutParamsFlagFocus();
         AppData.windowManager.updateViewLayout(smallView.getRoot(), smallViewParams);
         smallView.editText.requestFocus();
       }

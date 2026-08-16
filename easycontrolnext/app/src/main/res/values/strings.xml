@@ -118,6 +118,8 @@
   <string name="set_reachability_timeout_option">%1$d ms</string>
   <string name="set_other_locale">Change language (中文 / English)</string>
   <string name="set_other_locale_detail">Toggle app language; restart may be required</string>
+  <string name="set_keep_screen_on">Keep screen on during control</string>
+  <string name="set_keep_screen_on_detail">Prevent this device from sleeping while a remote control or mirror session is open</string>
   <string name="set_other_error_log">Error logs</string>
   <string name="set_other_error_log_detail">Browse, filter, copy, or share local error logs</string>
   <string name="set_about_website">Homepage</string>
@@ -144,11 +146,22 @@
   <!-- 查看IP地址页面 -->
   <string name="ip_ipv4">IPv4(Touch to copy)</string>
   <string name="ip_ipv6">IPv6(Touch to copy)</string>
+  <string name="set_ip_sheet_detail">IPv4 and IPv6 on this device. Multiple adapters may appear. Tap a row to copy.</string>
+  <string name="set_ip_section_ipv4">IPv4</string>
+  <string name="set_ip_section_ipv6">IPv6</string>
+  <string name="set_ip_empty">None found</string>
+  <string name="set_ip_copy">Copy</string>
 
   <!-- 查看密钥页面 -->
   <string name="adb_key_pub">Public key (Base64)</string>
   <string name="adb_key_pri">Private key (Base64)</string>
   <string name="adb_key_button">Save</string>
+  <string name="set_adb_key_sheet_detail">View the current ADB key pair, paste replacements, or import from files. Saving overwrites the local key files.</string>
+  <string name="set_adb_key_import_pub">Import public key</string>
+  <string name="set_adb_key_import_pri">Import private key</string>
+  <string name="set_reset_key_title">Reset ADB key?</string>
+  <string name="set_reset_key_message">This generates a new key pair and discards the current one. Devices that already authorized this key may need to authorize again.</string>
+  <string name="set_reset_key_confirm">Reset</string>
 
   <!-- 设备添加页面 -->
   <string name="device_editor_title_add">Add device</string>

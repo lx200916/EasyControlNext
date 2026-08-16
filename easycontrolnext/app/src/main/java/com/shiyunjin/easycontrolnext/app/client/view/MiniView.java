@@ -32,9 +32,22 @@ public class MiniView {
     WindowManager.LayoutParams.WRAP_CONTENT,
     WindowManager.LayoutParams.WRAP_CONTENT,
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE,
-    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+    miniViewFlags(),
     PixelFormat.TRANSLUCENT
   );
+
+  private static final int MiniViewFlagBase = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+    | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+    | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+    | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH;
+
+  private static int miniViewFlags() {
+    int flags = MiniViewFlagBase;
+    if (AppData.setting.getKeepScreenOnDuringControl()) {
+      flags |= WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
+    }
+    return flags;
+  }
 
   public MiniView(String uuid) {
     device = Client.getDevice(uuid);
@@ -50,6 +63,7 @@ public class MiniView {
   public void show(ByteBuffer byteBuffer) {
     if (device == null || clientController == null) return;
     miniViewParams.y = device.miniY;
+    miniViewParams.flags = miniViewFlags();
     // 显示
     ViewTools.viewAnim(miniView.getRoot(), true, PublicTools.dp2px(-40f), 0, (isStart -> {
       if (isStart) AppData.windowManager.addView(miniView.getRoot(), miniViewParams);

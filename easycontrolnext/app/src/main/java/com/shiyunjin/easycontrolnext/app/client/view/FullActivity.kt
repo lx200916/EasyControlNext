@@ -13,6 +13,7 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
@@ -131,6 +132,7 @@ class FullActivity : ComponentActivity(), SensorEventListener {
     super.onCreate(savedInstanceState)
     WindowCompat.setDecorFitsSystemWindows(window, false)
     hideSystemBars()
+    applyKeepScreenOn()
 
     val uuid = intent.getStringExtra("uuid")
     device = Client.getDevice(uuid)
@@ -192,7 +194,16 @@ class FullActivity : ComponentActivity(), SensorEventListener {
   override fun onResume() {
     super.onResume()
     hideSystemBars()
+    applyKeepScreenOn()
     registerOrientationSensor()
+  }
+
+  private fun applyKeepScreenOn() {
+    if (AppData.setting.keepScreenOnDuringControl) {
+      window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    } else {
+      window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {

@@ -118,6 +118,8 @@
   <string name="set_reachability_timeout_option">%1$d 毫秒</string>
   <string name="set_other_locale">语言切换（中文 / English）</string>
   <string name="set_other_locale_detail">切换应用语言，可能需要重启</string>
+  <string name="set_keep_screen_on">控制时保持屏幕常亮</string>
+  <string name="set_keep_screen_on_detail">在远程控制或投屏页面时，本机屏幕不进入锁屏</string>
   <string name="set_other_error_log">错误日志</string>
   <string name="set_other_error_log_detail">浏览、筛选、复制或分享本机错误日志</string>
   <string name="set_about_website">项目主页</string>
@@ -144,11 +146,22 @@
   <!-- 查看IP地址页面 -->
   <string name="ip_ipv4">IPv4(点击复制)</string>
   <string name="ip_ipv6">IPv6(点击复制)</string>
+  <string name="set_ip_sheet_detail">本机各网卡的 IPv4 / IPv6，可能有多块网卡。点按一行即可复制。</string>
+  <string name="set_ip_section_ipv4">IPv4</string>
+  <string name="set_ip_section_ipv6">IPv6</string>
+  <string name="set_ip_empty">未发现地址</string>
+  <string name="set_ip_copy">复制</string>
 
   <!-- 查看密钥页面 -->
   <string name="adb_key_pub">公钥(Base64编码)</string>
   <string name="adb_key_pri">私钥(Base64编码)</string>
   <string name="adb_key_button">保存</string>
+  <string name="set_adb_key_sheet_detail">可查看当前 ADB 密钥对，粘贴替换，或从文件导入。保存后会覆盖本机密钥文件。</string>
+  <string name="set_adb_key_import_pub">导入公钥</string>
+  <string name="set_adb_key_import_pri">导入私钥</string>
+  <string name="set_reset_key_title">重置密钥？</string>
+  <string name="set_reset_key_message">将生成新的密钥对并丢弃当前密钥。已授权过此密钥的设备可能需要重新授权。</string>
+  <string name="set_reset_key_confirm">重置</string>
 
   <!-- 设备添加页面 -->
   <string name="device_editor_title_add">添加设备</string>
